@@ -18,9 +18,9 @@ Measured over 240 plans (60 per station) with `tools/diagnose.js`. "Target" is w
 | Bass notes that follow the kick, off the kick's swung time | all of them | none | none |
 | Melody notes at or below the chords' top note | 28% | 0% | 0% |
 | Melody notes a semitone above a sounding chord note | 18% (any rub) | 0% on the beat | 0% anywhere |
-| Melody shared by two A sections | 64% | at least 95% | 100% |
+| Melody shared by two A sections | 64% | at least 95% | 100%; round 3 varies the last A, see [MELODY.md](MELODY.md) §3 |
 | Drum hits shared by bar n and bar n+2 (outside variation bars) | 79% | 100% | 100% |
-| Melody moving by step (≤ 2 semitones) | 56% | at least 70% | 71.5% |
+| Melody moving by step (≤ 2 semitones) | 56% | at least 70% | 71.5%; 68.7% after round 3's rests and leaps, see [MELODY.md](MELODY.md) §3 |
 | In-key chords with a colour note outside the mode | 11% | 0% | 0% |
 | Keys velocity spread within a track | 0.05 | at least 0.1 | 0.107 |
 

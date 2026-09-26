@@ -17,6 +17,13 @@ const params = new URLSearchParams(location.search);
 const sr = 44100;
 let ctx, batchId = 0;
 
+// ?compare=<engine>: each track is followed by the same seed planned by an older engine, kept as a git worktree in
+// engines/<engine>/, and played through today's renderer, so the two differ only in what that engine wrote
+// (MELODY.md §4). Each is rated on its own.
+const compare = /^[\w.-]+$/.test(params.get('compare') ?? '') ? params.get('compare') : null;
+const older = compare && await Promise.all(['plan', 'stations'].map((m) => import(`../engines/${compare}/src/${m}.js`)))
+  .then(([{ plan }, { stationById }]) => (seed, id) => plan(seed, stationById(id)));
+
 // Ratings stay in this browser, keyed by engine, station and seed, so rating a track again replaces the old rating;
 // a new engine writes a different melody from the same seed, so its rating is kept apart. Each keeps the track's
 // traits, opening and melody scores, so the ratings can later be read against what the engine chose.
@@ -66,15 +73,13 @@ function audio() {
 const tracks = [];
 function build() {
   const station = stationById(stationSel.value), base = Number($('seed').value) >>> 0, id = ++batchId;
-  history.replaceState(null, '', `?station=${station.id}&seed=${base}`);
+  history.replaceState(null, '', `?station=${station.id}&seed=${base}${compare ? `&compare=${compare}` : ''}`);
   stop();
   tracks.forEach(forget);
   $('grid').innerHTML = '';
   tracks.length = 0;
   const recent = [];
-  for (let i = 0; i < COUNT; i++) {
-    const { plan, rerolls, problems } = nextTrack(deriveSeed(base, i), station, recent);
-    recent.unshift(plan);
+  const add = (plan, rerolls, problems, i) => {
     const last = plan.sections.length - 1, span = sectionSpan(plan, last);
     const tr = { plan, length: span.start + span.length + TAIL, rerolls, opening: null, whole: null, lastUse: 0 };
     tr.card = cardFor(tr, problems, i);
@@ -87,6 +92,12 @@ function build() {
       tr.card.peaks(res.L, res.R, 0);
       if (!tr.whole) tr.card.status(`opening rendered in ${(res.ms / 1000).toFixed(1)} s`);
     });
+  };
+  for (let i = 0; i < COUNT; i++) {
+    const { plan, rerolls, problems } = nextTrack(deriveSeed(base, i), station, recent);
+    recent.unshift(plan);
+    add(plan, rerolls, problems, i);
+    if (older) add(older(plan.seed, station.id), 0, [], i);
   }
 }
 
@@ -240,10 +251,10 @@ function cardFor(tr, problems, i) {
   el.className = 'card';
   const chip = (text, cls = '') => `<span class="chip ${cls}">${text}</span>`;
   el.innerHTML = `
-    <div class="top"><span class="title">${i + 1}. ${p.title}</span><span class="seed">seed ${p.seed}</span></div>
+    <div class="top"><span class="title">${i + 1}. ${p.title}</span><span class="seed">seed ${p.seed}${compare ? ` · ${p.engine}` : ''}</span></div>
     <div class="facts">${chip(`${NOTE_NAMES[t.key]} ${t.mode}`)}${chip(`${p.bpm} bpm`)}${chip(`opens: ${t.intro}`, 'intro')}${chip(`stands out: ${t.standout}`, 'standout')}
       ${chip(KEYS[t.keysVoice])}${chip(`lead: ${t.leadVoice}`)}${chip(`${t.bassVoice} bass`)}${chip(`${t.kit} kit`)}${chip(`${t.family} beat, ${t.feel.grid}ths swung ${Math.round(t.feel.swing * 100)}%`)}
-      ${chip(t.voicing)}${chip(t.comp === t.compB ? t.comp : `${t.comp}, B ${t.compB}`)}${chip(`melody: ${t.phrase}`)}${S.echo ? chip('echo') : ''}${S.grit ? chip(`${S.grit.bits}-bit`) : ''}${S.texture ? chip('ocean bed') : ''}</div>
+      ${chip(t.voicing)}${chip(t.comp === t.compB ? t.comp : `${t.comp}, B ${t.compB}`)}${chip(`melody: ${t.melody ?? t.phrase}`)}${S.echo ? chip('echo') : ''}${S.grit ? chip(`${S.grit.bits}-bit`) : ''}${S.texture ? chip('ocean bed') : ''}</div>
     <div class="prog"><b>A</b> ${t.shape} <b>· B</b> ${t.shapeB}${t.shift !== 'none' ? ` <b>(${t.shift})</b>` : ''}</div>
     ${melody ? `<div class="prog"><b>melody</b> surprise ${melody.surprise.toFixed(2)} bits <b>·</b> fit ${melody.fit.toFixed(2)} <b>·</b> new bars ${Math.round(100 * melody.fresh)}%</div>` : ''}
     <canvas width="600" height="112" aria-label="the whole track: click to play from there"></canvas>

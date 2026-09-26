@@ -3,16 +3,16 @@
 // Times are in beats, already swung; `ms` on an event is the part's lean against the beat (its pocket) plus a little
 // human wobble, which the renderer adds on top.
 import { stream } from './rand.js';
-import { isMinor } from './theory.js';
+import { isMinor, chordPcs, mod12 } from './theory.js';
 import { progression, scaleOf, colourChord } from './harmony.js';
 import { voice, bassNote } from './voicing.js';
 import { kickPattern, drumPattern, drumBar, busier, swingBeat, FILLS, COMPS, BASSLINES } from './groove.js';
-import { idea, writeMelody } from './melody.js';
+import { CHARACTERS, hook, writeMelody, vary, pickupInto, rubs } from './melody.js';
 import { sections as buildSections } from './form.js';
 
 // Which melody engine wrote the plan. A new engine writes a different melody from the same seed, so ratings and
 // rendered tracks carry this tag (MELODY.md §1).
-export const ENGINE = 'melody-2';
+export const ENGINE = 'melody-3a';
 
 // Each track turns one trait up so it has something you remember it by.
 export const STANDOUTS = { tape: 1, mediant: 1, drag: 1, halftime: 1, strum: 1 };
@@ -26,8 +26,10 @@ export function plan(seed, station) {
   // the station is part of each stream's name, so one seed makes a different track on each station
   const R = (part) => stream(seed, `${station.id}:${part}`);
   const H = R('harmony'), Rh = R('rhythm'), Me = R('melody'), F = R('form'), S = R('sound'), Sp = R('space'), T = R('title');
+  // where the lead plays and the keys' fills in its rests: their own stream, so the backing stays put when they change
+  const Ar = R('arrange');
   // the small human wobbles in timing and strength, one stream per part so a part coming in never moves another's
-  const touch = Object.fromEntries(['keys', 'bass', 'lead', 'drums'].map((k) => [k, R(`touch:${k}`)]));
+  const touch = Object.fromEntries(['keys', 'bass', 'lead', 'drums', 'fill'].map((k) => [k, R(`touch:${k}`)]));
 
   const standout = F.weighted(STANDOUTS);
   const key = H.int([0, 11]), mode = H.weighted(M.modes), colour = H.weighted(M.colour);
@@ -73,13 +75,15 @@ export function plan(seed, station) {
   }[shift];
   const progB = progression(H, { mode: bMode, colour, grammar: M.grammar, shapes: M.shapes, startFn: { T: 2, PD: 5, D: 1 }, avoid: [progA.shape] });
 
-  const secs = buildSections(F, { form, intro, loopBars: Math.max(progA.bars, progB.bars), leadFrom, softB });
+  const secs = buildSections(F, { form, intro, loopBars: Math.max(progA.bars, progB.bars), leadFrom, softB, arrange: Ar });
 
   // Register: the melody owns a band; the hands stay under it.
   const lead = Math.round(Me.range(M.lead)), band = [lead - 5, lead + 7];
   const ceiling = lead - 7, center = Math.min(register, ceiling - 5);
-  const phrase = Me.weighted({ sentence: 3, period: 3, aaba: 2, call: 1 });
-  const ideaA = idea(Me), ideaB = Me.chance(0.6) ? idea(Me, ideaA) : idea(Me); // B keeps A's rhythm more often than not
+  // The melody's character (MELODY.md §2), drawn after the register so the hands' voicings don't depend on it. B has
+  // its own hook, a little slower, in a band a few semitones higher.
+  const melody = Me.weighted(M.melodies), C = CHARACTERS[melody];
+  const hookA = hook(Me, C), hookB = hook(Me, C, { longer: true }), bandB = band.map((m) => m + C.lift);
 
   // Voicings are fixed per progression, like a looped sample: a repeated section is the same loop. The loop is voiced
   // twice round and the second pass kept, so its last chord leads smoothly back into its first.
@@ -110,20 +114,18 @@ export function plan(seed, station) {
     return sec.energy >= m.energy + 0.1 ? busier(m.p) : m.p;
   };
 
-  // Melodies are written once per section type and reused whole. The pickup intro previews A's opening bars.
-  const melodies = {};
+  // Melodies are written once per section type and reused whole, apart from the last A, which changes its ending
+  // when an A with the lead came before it. The pickup intro previews A's opening bars.
+  const melodies = {}, under = (sec) => { const isB = sec.kind === 'B', loop = loopOf(isB ? progB : progA, isB ? bKey : key); return { chordAt: (t) => loop.at(t).chord, voicingAt: (t) => loop.at(t).v }; };
   const melodyFor = (kind, bars) => {
-    const k = kind === 'intro' ? 'A' : kind;
-    if (!melodies[k]) {
-      const prog = k === 'B' ? progB : progA, loop = loopOf(prog, k === 'B' ? bKey : key);
-      melodies[k] = writeMelody(Me, {
-        idea: k === 'B' ? ideaB : ideaA, form: k === 'break' ? 'call' : phrase, bars: secs.find((x) => x.kind === k)?.bars ?? 8,
-        key: k === 'B' ? bKey : key, mode: k === 'B' ? bMode : mode, band,
-        chordAt: (t) => loop.at(t).chord, voicingAt: (t) => loop.at(t).v,
-      });
-    }
+    const k = kind === 'intro' ? 'A' : kind, isB = k === 'B';
+    if (!melodies[k]) melodies[k] = writeMelody(Me, {
+      character: C, hook: isB ? hookB : hookA, bars: secs.find((x) => x.kind === k)?.bars ?? 8, maxPlay: k === 'break' ? 2 : 3,
+      key: isB ? bKey : key, mode: isB ? bMode : mode, band: isB ? bandB : band, ...under({ kind: k }),
+    });
     return melodies[k].filter((n) => n.beat < bars * 4);
   };
+  const leadAs = secs.filter((s) => s.kind === 'A' && s.layers.includes('lead')), varied = leadAs.length > 1 ? leadAs[leadAs.length - 1] : null;
 
   const sw = (b, amount = swing) => swingBeat(b, amount, grid);
   const lean = (part, ms, spread) => ms + touch[part].gauss() * feel.jitterMs * spread;
@@ -202,18 +204,42 @@ export function plan(seed, station) {
       }
     });
 
-    if (has('lead')) for (const n of melodyFor(sec.kind, sec.bars)) {
-      const at = beat + n.beat;
-      events.lead.push({ beat: sw(at), len: sw(at + n.len) - sw(at), midi: n.midi, vel: n.vel, ms: lean('lead', feel.leadMs, 0.5) });
-      cues.push({ beat: sw(at), type: 'note', midi: n.midi });
+    if (has('lead')) {
+      let notes = melodyFor(sec.kind, sec.bars);
+      if (sec === varied) notes = vary(Me, notes, { key: sec.key, mode: sec.mode, band, bars: sec.bars, ...under(sec) });
+      // the section before may end with two eighths on its last beat, stepping into this one's first note
+      const before = secs[si - 1];
+      if (before?.pickup && notes.length) {
+        const { chordAt, voicingAt } = under(before), t = before.bars * 4 - 1;
+        notes = [...pickupInto(notes[0].midi, { key: before.key, band: isB ? bandB : band, chord: chordAt(t), voicing: voicingAt(t), from: -1 }).map((n) => ({ ...n, echo: 0.5 })), ...notes];
+      }
+      // with echo on, a phrase's last note sends twice as much to it and the notes inside the phrase half as much
+      for (const n of notes) {
+        const at = beat + n.beat;
+        events.lead.push({ beat: sw(at), len: sw(at + n.len) - sw(at), midi: n.midi, vel: n.vel, ms: lean('lead', feel.leadMs, 0.5), echo: n.echo ?? (n.end ? 2 : 0.5) });
+        cues.push({ beat: sw(at), type: 'note', midi: n.midi });
+      }
+      // The keys answer the lead's rests: in the first bar left empty after a phrase, 2–4 eighths up or down through
+      // the chord notes just above the voicing, ending at the bar line. Only over held chords; a pulse is busy enough.
+      if (has('keys') && compHere !== 'pulse') for (const end of notes.filter((n) => n.end)) {
+        const b = Math.floor(end.beat / 4) + 1, count = Ar.int([2, 4]), up = Ar.chance(0.5), from = b * 4 + 4 - count / 2;
+        if (b >= sec.bars || notes.some((n) => n.beat < b * 4 + 4 && n.beat + n.len > b * 4)) continue;
+        const c = loop.at(from).chord, v = loop.at(from).v, pcs = chordPcs(sec.key + c.root, c.q), pool = [];
+        for (let m = v[v.length - 1] + 1; pool.length < 3 && m < v[v.length - 1] + 24; m++) if (pcs.includes(mod12(m)) && !rubs(m, v)) pool.push(m);
+        for (let i = 0; i < count; i++) {
+          const at = beat + from + i / 2, z = [0, 1, 2, 1][i];
+          events.keys.push({ beat: sw(at), len: sw(at + 0.45) - sw(at), midis: [pool[up ? z : 2 - z]], vel: clamp((0.4 + 0.3 * sec.energy) * (1 + 0.08 * touch.fill.gauss()), 0.3, 0.8), ms: feel.keysMs + touch.fill.gauss() * feel.jitterMs * 0.5, spreadMs: 0, fill: true });
+        }
+      }
     }
     beat += len;
   });
   cues.sort((a, b) => a.beat - b.beat);
+  events.keys.sort((a, b) => a.beat - b.beat); // the fills went in after their sections' chords
 
   const traits = {
     key, mode, colour, bpm, shape: progA.shape, shapeB: progB.shape, loop: `${progA.bars}×${progA.perBar}`, shift,
-    family, voicing, register: Math.round(center), lead, phrase, comp, compB, bassline, keysVoice, leadVoice, bassVoice, kit, shaker,
+    family, voicing, register: Math.round(center), lead, melody, comp, compB, bassline, keysVoice, leadVoice, bassVoice, kit, shaker,
     tape, intro, form, standout, feel, patch, space,
   };
   const title = `${T.pick(TITLE_A)} ${T.pick(TITLE_B)}`;

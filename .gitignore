@@ -5,3 +5,4 @@ node_modules/
 renders/
 __pycache__/
 .claude/
+engines/

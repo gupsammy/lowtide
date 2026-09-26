@@ -10,5 +10,5 @@ const plans = STATIONS.flatMap((st) => Array.from({ length: 40 }, (_, i) => plan
 const m = measure(plans);
 
 for (const [name, key, passes, target] of TARGETS) {
-  test(`${name}: ${target}`, () => assert.ok(passes(m[key]), `${name}: ${m[key].toFixed(3)}`));
+  test(`${name}: ${target}`, () => assert.ok(passes(m[key]), `${name}: ${JSON.stringify(m[key])}`));
 }

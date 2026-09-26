@@ -1,78 +1,107 @@
-// A melody, built skeleton first and decorated after, the way a songwriter settles the long notes before the quick ones.
-// 1. The idea: one bar of two to four notes on eighth-note slots, with a shape in scale steps.
-// 2. The phrase form, one per song: which bars state the idea, which answer it, where it comes to rest.
-// 3. The skeleton: each bar's first note (its target) is a note of the chord under it. A small search picks the
-//    targets for the whole section at once, preferring steps, an arch, the new chord's 3rd or 7th, a proper cadence.
-// 4. The decoration: the idea's other notes follow its shape from the target. Beats 1 and 3 land on chord notes;
-//    no note sits a semitone above a note the keys are holding.
+// A melody, built skeleton first and decorated after, the way a songwriter settles the long notes before the quick
+// ones (MELODY.md §3).
+// 1. The hook: two bars, an idea and an answer that carries the ending, drawn in the track's character (how many
+//    notes and how long, how often a note repeats, one signature leap).
+// 2. Phrases in 4-bar units: the lead plays the unit's first 1–3 bars and rests to its end. The first unit states the
+//    hook and ends open; later units bring its idea bars back note for note where the chords repeat, and the last
+//    one closes on degree 1 or 3, over a home chord where the loop reaches one.
+// 3. The skeleton: each bar has a target (the idea's first note, or the answer's last) on a note of the chord under
+//    it. A small search picks a unit's targets at once, preferring steps within and between bars, the phrase's
+//    contour, the new chord's 3rd or 7th, and a proper ending.
+// 4. The decoration: the other notes follow the shape, each from its neighbour. Beats 1 and 3 land on chord notes; no
+//    note sits a semitone above a note the keys are holding.
+// 5. One peak: the section's top note sounds once, in its second half, on the note whose lift there moves least.
 import { MODES, QUALITIES, chordPcs, mod12 } from './theory.js';
 
-// A one-bar idea: [{ slot 0–7, len in eighths, step }], step in scale steps from the first note. Pass `rhythm` (an
-// earlier idea) to keep its rhythm and draw only a new shape.
-export function idea(R, rhythm) {
-  const notes = rhythm ? rhythm.map(({ slot, len }) => ({ slot, len })) : ideaRhythm(R);
-  let step = 0, last = 0, lo = 0, hi = 0;
-  notes.forEach((n, i) => {
-    if (i === 0) { n.step = 0; return; }
-    // mostly steps, falling a little more often than rising; after a leap, turn back
-    let move = Math.abs(last) >= 2 ? -Math.sign(last) : Number(R.weighted({ '-1': 4, 1: 3, '-2': 1.2, 2: 1, 0: 0.8, 3: 0.4, '-3': 0.5 }));
-    if (Math.max(hi, step + move) - Math.min(lo, step + move) > 4) move = -move; // the shape spans at most 4 steps
-    step += move; last = move; lo = Math.min(lo, step); hi = Math.max(hi, step);
-    n.step = step;
-  });
-  return notes;
-}
-
-function ideaRhythm(R) {
-  for (;;) {
-    const count = Number(R.weighted({ 2: 2, 3: 3, 4: 2 })), slots = [];
-    let slot = Number(R.weighted({ 0: 6, 1: 1, 2: 1.5 })); // mostly on the downbeat
-    while (slots.length < count && slot < 8) { slots.push(slot); slot += Number(R.weighted({ 1: 2, 2: 4, 3: 2 })); }
-    if (slots.length < 2) continue;
-    return slots.map((s, i) => ({ slot: s, len: (slots[i + 1] ?? Math.min(8, s + R.pick([2, 3, 4]))) - s }));
-  }
-}
-
-// Phrase forms, bar by bar, four bars to a phrase. 'half' ends the first half of a period on an open note.
-export const FORMS = {
-  sentence: ['idea', 'idea', 'fragment', 'cadence'],
-  period: ['idea', 'half', 'idea', 'cadence'],
-  aaba: ['idea', 'idea', 'contrast', 'cadence'],
-  call: ['idea', 'rest', 'idea', 'cadence'],
+// How each character phrases (MELODY.md §2–3). play: bars played per 4-bar unit (weights); notes: [fewest, most] in
+// the two-bar hook; motif: the hook is a one-bar motif stated twice; lens: note lengths in eighths (weights); repeat:
+// how often a note repeats the one before (weight among the moves); leap: the hook's signature leap; contours: the
+// phrase shapes (weights); returns: odds a section brings its idea bars back note for note; lift: semitones B's band
+// sits above A's.
+export const CHARACTERS = {
+  sparse: { play: { 1: 1, 2: 4, 3: 1 }, notes: [2, 4], lens: { 3: 2, 4: 3, 6: 2 }, repeat: 0.8, leap: null, contours: { fall: 1, arch: 1 }, returns: 0.8, lift: 2 },
+  singable: { play: { 2: 3, 3: 1 }, notes: [4, 8], lens: { 1: 2, 2: 3, 3: 1 }, repeat: 3, leap: 'up', contours: { arch: 3, ramp: 1, terrace: 1 }, returns: 0.9, lift: 3 },
+  soloist: { play: { 2: 2, 3: 1 }, notes: [5, 8], lens: { 1: 3, 2: 2 }, repeat: 0.4, leap: 'any', contours: { arch: 2, ramp: 1, terrace: 1 }, returns: 0.6, lift: 2 },
+  drifting: { play: { 2: 1, 3: 1 }, notes: [3, 5], motif: true, lens: { 2: 3, 3: 2 }, repeat: 1.8, leap: 'fourths', contours: { hover: 2, arch: 1 }, returns: 0.9, lift: 2 },
 };
-// Scale degrees a cadence may end on: open ones leave the phrase hanging, closed ones bring it home.
-const CADENCE = { open: [2, 5, 7], closed: [1, 3] };
+
+// Phrase shapes: where the line aims, 0 (the band's floor) to 1, at x, 0–1 through the bars a unit plays.
+const arch = (x) => (x <= 0.62 ? Math.sin((Math.PI / 2) * (x / 0.62)) : Math.cos((Math.PI / 2) * Math.min(1, (x - 0.62) / 0.38)));
+const CONTOURS = {
+  arch, // rises to a peak about two thirds through and falls faster than it rose
+  fall: (x) => 0.9 - 0.7 * x, // starts high and comes down
+  ramp: (x) => 0.2 + 0.7 * x, // climbs
+  terrace: (x) => 0.25 + 0.5 * ((2 * x) % 1), // climbs, drops back, climbs again
+  hover: () => 0.5, // stays near the middle
+};
+
+// Notes packed from slot `from` to `to` (eighths within a bar), lengths drawn from `lens`, now and then an eighth's
+// breath between them.
+function fill(R, count, lens, from, to) {
+  const out = [];
+  for (let slot = from; out.length < count && slot < to;) {
+    const len = Math.min(Number(R.weighted(lens)), to - slot);
+    out.push({ slot, len });
+    slot += len + (R.chance(0.15) ? 1 : 0);
+  }
+  return out;
+}
+
+// The idea's shape in scale steps from its first note: mostly steps, falling a little more often than rising; a
+// leap turns back; the shape spans at most 4 steps, apart from the character's one signature leap.
+function shape(R, C, count) {
+  const moves = { '-1': 4, 1: 3, '-2': 0.6, 2: 0.5, 0: C.repeat, 3: C.leap === 'fourths' ? 1.2 : 0.4, '-3': C.leap === 'fourths' ? 1.2 : 0.5 };
+  const leapAt = C.leap && C.leap !== 'fourths' && count >= 3 ? R.int([1, count - 1]) : -1;
+  const steps = [0];
+  let last = 0, lo = 0, hi = 0;
+  for (let i = 1; i < count; i++) {
+    const at = steps[i - 1];
+    let move;
+    if (i === leapAt) move = C.leap === 'up' ? R.int([3, 5]) : R.pick([-4, -3, 3, 4]); // a 4th to a 6th
+    else {
+      move = Math.abs(last) >= 2 ? -Math.sign(last) : Number(R.weighted(moves));
+      if (Math.max(hi, at + move) - Math.min(lo, at + move) > 4 + (leapAt > 0 ? 5 : 0)) move = -move;
+    }
+    steps.push(at + move);
+    last = move; lo = Math.min(lo, at + move); hi = Math.max(hi, at + move);
+  }
+  return steps;
+}
+
+// The hook: { idea, answer }, each one bar of [{ slot, len, step }] with slot and len in eighths. The idea's steps
+// count from its first note; the answer's lead into its last note, the ending, mostly stepping down onto it.
+// longer: B's hook, a little slower.
+export function hook(R, C, { longer = false } = {}) {
+  const lens = longer ? Object.fromEntries(Object.entries(C.lens).map(([l, w]) => [Number(l) + 1, w])) : C.lens;
+  const n = R.int(C.notes), start = Number(R.weighted({ 0: 6, 1: 1, 2: 1.5 }));
+  const ideaCount = C.motif ? n : Math.ceil(n / 2);
+  const rhythm = fill(R, ideaCount, lens, start, 8), steps = shape(R, C, rhythm.length);
+  const idea = rhythm.map((x, i) => ({ ...x, step: steps[i] }));
+  if (C.motif) { // the motif again, its last note held to the bar's end as the ending
+    const last = idea[idea.length - 1];
+    return { idea, answer: idea.map((x) => ({ ...x, step: x.step - last.step, ...(x === last ? { len: 8 - x.slot, end: true } : {}) })) };
+  }
+  const count = Math.max(1, n - idea.length), end = count === 1 ? Number(R.weighted({ 0: 2, 2: 1 })) : count === 2 ? Number(R.weighted({ 2: 1, 4: 3 })) : 4;
+  const before = fill(R, count - 1, lens, 0, end), steps2 = [0];
+  for (let i = 0; i < before.length; i++) steps2.unshift(steps2[0] + Number(R.weighted({ 1: 4, 2: 0.6, '-1': 1.5, 0: C.repeat * 0.5 })));
+  const answer = [...before, { slot: end, len: 8 - end, end: true }].map((x, i) => ({ ...x, step: steps2[i] }));
+  return { idea, answer };
+}
+
+// Scale degrees an ending may rest on: an open one leaves the phrase hanging, a closed one brings it home.
+const ENDINGS = { open: [2, 5, 7], closed: [1, 3] };
 
 // A note a semitone above a note the keys hold grinds against it (a minor 9th).
 export const rubs = (midi, voicing) => voicing.some((v) => mod12(midi - v) === 1);
 
 const moveCost = (d) => (d === 0 ? 0.7 : d <= 2 ? 0.15 * d : d <= 4 ? 0.45 * d : d <= 7 ? 0.8 * d : 1.5 * d);
-// The phrase rises to a peak about two thirds through and falls faster than it rose.
-const arch = (x) => (x <= 0.62 ? Math.sin((Math.PI / 2) * (x / 0.62)) : Math.cos((Math.PI / 2) * Math.min(1, (x - 0.62) / 0.38)));
 
-// The notes of one bar before any pitch is chosen: [{ slot, len, step }], step counted from the bar's target.
-function barShape(role, I) {
-  if (role === 'rest') return [];
-  if (role === 'cadence' || role === 'half') return [{ slot: 0, len: 6, step: 0, cadence: true }];
-  if (role === 'contrast') return I.map((n) => ({ ...n, step: -n.step }));
-  if (role === 'fragment') {
-    // the idea's first half, then again a step lower: the quickening in the third bar of a sentence
-    const half = I.filter((n) => n.slot < 4).map((n) => ({ ...n, len: Math.min(n.len, 4 - n.slot) }));
-    const h = half.length ? half : [{ slot: 0, len: 2, step: 0 }];
-    return [...h, ...h.map((n) => ({ ...n, slot: n.slot + 4, step: n.step - 1 }))];
-  }
-  return I.map((n) => ({ ...n }));
-}
-
-// idea: from idea(); form: a FORMS key; band: [lo, hi] MIDI notes the melody may use; chordAt(beat) and
-// voicingAt(beat): what sounds under a beat of the section. Returns [{ beat (from the section's start), len, midi, vel }].
-export function writeMelody(R, { idea: I, form, bars, key, mode, band: [lo, hi], chordAt, voicingAt }) {
-  const phrases = Math.ceil(bars / 4);
-  const plan = Array.from({ length: bars }, (_, b) => {
-    const role = FORMS[form][b % 4], phrase = Math.floor(b / 4);
-    const cadence = role === 'half' ? 'open' : role === 'cadence' ? (phrase === phrases - 1 ? 'closed' : 'open') : null;
-    return { b, role, cadence, notes: barShape(role, I), phrase };
-  });
+// character: from CHARACTERS; hook: from hook(); bars: the section's length; band: [lo, hi] MIDI notes the melody
+// may use; chordAt(beat) and voicingAt(beat): what sounds under a beat of the section; maxPlay: most bars played per
+// unit. Returns [{ beat (from the section's start), len, midi, vel, end }], end marking each phrase's last note.
+export function writeMelody(R, { character: C, hook: H, bars, key, mode, band: [lo, hi], chordAt, voicingAt, maxPlay = 3 }) {
+  const units = Math.ceil(bars / 4), play = Math.min(maxPlay, Number(R.weighted(C.play)));
+  const returns = R.chance(C.returns);
   const scaleNotes = (ch) => {
     const pcs = (ch.scale ?? QUALITIES[ch.q]).map((x) => mod12(key + ch.root + x));
     const out = [];
@@ -90,87 +119,195 @@ export function writeMelody(R, { idea: I, form, bars, key, mode, band: [lo, hi],
   const tonesOf = (ch) => chordPcs(key + ch.root, ch.q);
   const inBand = (m) => m >= lo && m <= hi;
   const degreeIn = (m) => { const i = MODES[mode].indexOf(mod12(m - key)); return i < 0 ? null : i + 1; }; // 1–7 in the mode
+  const home = (b, slot) => chordAt(b * 4 + slot / 2).root === 0;
+  const tonicFn = (b, slot) => chordAt(b * 4 + slot / 2).fn === 'T';
 
-  // Decorate one bar from a target: the other notes follow the shape; strong beats move to chord notes along their
-  // own direction of motion; weak notes that rub move a step.
+  // The bars of each unit. The last unit closes where a home chord sounds, if one comes within its first 3 bars.
+  const plan = [];
+  for (let u = 0; u < units; u++) {
+    const base = u * 4, last = u === units - 1, room = Math.min(4, bars - base);
+    let k = Math.min(play, room);
+    if (last) {
+      const at = (test) => [k - 1, ...[1, 2, 3].filter((j) => j !== k - 1)].find((j) => j >= 1 && j < Math.min(room, maxPlay + 1)
+        && [0, 4].some((s) => test(base + j, s)));
+      k = (at(home) ?? at(tonicFn) ?? k - 1) + 1;
+    }
+    for (let j = 0; j < k; j++) {
+      const answer = j === k - 1, notes = answer ? H.answer : H.idea;
+      plan.push({ b: base + j, u, j, answer, ending: answer ? (last ? 'closed' : 'open') : null, contour: null, played: k, notes });
+    }
+  }
+  const contours = Array.from({ length: units }, () => CONTOURS[R.weighted(C.contours)]);
+
+  // The closing bar needs room for the peak before its ending, and its ending on the home chord if the bar has one.
+  const closing = plan[plan.length - 1];
+  if (closing.ending === 'closed') {
+    let notes = closing.notes;
+    if (notes.length < 2) { const e = notes[0]; notes = [{ slot: 0, len: 2, step: 2 }, { ...e, slot: Math.max(2, e.slot), len: 8 - Math.max(2, e.slot) }]; }
+    const end = notes[notes.length - 1];
+    const slot = [end.slot, 4, 2, 0].find((s) => s >= notes.length - 1 && home(closing.b, s)) ?? end.slot;
+    if (slot !== end.slot) {
+      const before = notes.slice(0, -1).filter((x) => x.slot < slot).map((x) => ({ ...x, len: Math.min(x.len, slot - x.slot) }));
+      notes = [...(before.length ? before : [{ slot: 0, len: slot, step: 2 }]), { ...end, slot, len: 8 - slot }];
+    }
+    closing.notes = notes;
+  }
+
+  // Decorate one bar from its target T, the anchor: each other note moves from its neighbour nearer the anchor by
+  // the shape's step, so a note nudged to fit shifts the notes beyond it too and every move keeps its size. Strong
+  // beats move to the nearest chord note; weak notes that rub move a step.
+  const anchorOf = (P) => (P.answer ? P.notes.length - 1 : 0);
   const realise = (P, T) => {
-    const out = [];
-    let prev = T;
-    P.notes.forEach((n, i) => {
-      const beat = P.b * 4 + n.slot / 2, ch = chordAt(beat), v = voicingAt(beat), tones = tonesOf(ch);
-      let m = i === 0 ? T : stepFrom(T, n.step, ch);
-      if (!inBand(m)) m = stepFrom(T, -n.step, ch); // a shape that would leave the band turns the other way
-      if (!inBand(m)) m = T;
-      if (i > 0) {
-        const dir = Math.sign(m - prev) || (m > (lo + hi) / 2 ? -1 : 1);
-        const strong = n.slot === 0 || n.slot === 4;
-        const ok = (x) => inBand(x) && !rubs(x, v) && (!strong || tones.includes(mod12(x)));
-        if (!ok(m)) {
-          const along = [1, 2, 3, 4].map((d) => m + dir * d), back = [1, 2, 3, 4].map((d) => m - dir * d);
-          const pool = strong ? [...along, ...back] : [stepFrom(m, dir, ch), stepFrom(m, -dir, ch), ...along, ...back];
-          m = pool.find(ok) ?? m;
-        }
+    const a = anchorOf(P), out = [];
+    out[a] = { ...P.notes[a], midi: T };
+    const place = (i, j) => {
+      const n = P.notes[i], beat = P.b * 4 + n.slot / 2, ch = chordAt(beat), v = voicingAt(beat), tones = tonesOf(ch);
+      const from = out[j].midi, k = n.step - P.notes[j].step;
+      let m = stepFrom(from, k, ch);
+      if (!inBand(m)) m = stepFrom(from, -k, ch); // a move that would leave the band turns the other way
+      if (!inBand(m)) m = from;
+      const dir = Math.sign(m - from) || (m > (lo + hi) / 2 ? -1 : 1), strong = n.slot === 0 || n.slot === 4;
+      const ok = (x) => inBand(x) && !rubs(x, v) && (!strong || tones.includes(mod12(x)));
+      if (!ok(m)) {
+        const near = [1, 2, 3, 4].flatMap((d) => [m + dir * d, m - dir * d]);
+        m = (strong ? near : [stepFrom(m, dir, ch), stepFrom(m, -dir, ch), ...near]).find(ok) ?? m;
       }
-      out.push({ ...n, midi: m });
-      prev = m;
-    });
+      out[i] = { ...n, midi: m };
+    };
+    for (let i = a + 1; i < P.notes.length; i++) place(i, i - 1);
+    for (let i = a - 1; i >= 0; i--) place(i, i + 1);
     return out;
   };
 
-  // The skeleton: a shortest path through each bar's candidate targets.
-  const bars_ = plan.filter((P) => P.notes.length);
-  const states = bars_.map((P) => {
-    const first = P.notes[0], beat = P.b * 4 + first.slot / 2, ch = chordAt(beat), v = voicingAt(beat);
-    const tones = tonesOf(ch), ivs = QUALITIES[ch.q];
-    let cands = [];
-    for (let m = lo; m <= hi; m++) if (tones.includes(mod12(m)) && !rubs(m, v)) cands.push(m);
-    if (!cands.length) for (let m = lo; m <= hi; m++) if (tones.includes(mod12(m))) cands.push(m);
-    const inPhrase = (P.b % 4 + first.slot / 8) / 4, lastPhrase = phrases > 1 && P.phrase === phrases - 1;
-    const aim = lo + 3 + 0.5 * (hi - lo) * (lastPhrase ? 1.15 : 1) * arch(inPhrase);
-    return cands.map((m) => {
+  // A bar's candidate targets: chord notes in the band, free of rubs, each costed by its distance from the phrase's
+  // aim, its colour, for an ending its degree, and the moves of the bar it decorates into.
+  const candidates = (P, contour) => {
+    const t = P.notes[anchorOf(P)], beat = P.b * 4 + t.slot / 2, ch = chordAt(beat), v = voicingAt(beat), tones = tonesOf(ch), ivs = QUALITIES[ch.q];
+    let ms = [];
+    for (let m = lo; m <= hi; m++) if (tones.includes(mod12(m)) && !rubs(m, v)) ms.push(m);
+    if (!ms.length) for (let m = lo; m <= hi; m++) if (tones.includes(mod12(m))) ms.push(m);
+    const x = (P.j + t.slot / 8) / P.played, aim = lo + 2 + 0.6 * (hi - lo) * contour(x) * (P.u === units - 1 && units > 1 ? 1.1 : 1);
+    const pull = contour === CONTOURS.hover ? 0.45 : 0.18;
+    return ms.map((m) => {
       const iv = ivs.find((x) => mod12(key + ch.root + x) === mod12(m));
-      let cost = 0.18 * Math.abs(m - aim) + R.next() * 0.3;
+      let cost = pull * Math.abs(m - aim) + R.next() * 0.3;
       if (iv > 12) cost += 0.25; // a 9th, 11th or 13th as the long note: lovely, but not every time
-      if (P.cadence && !CADENCE[P.cadence].includes(degreeIn(m))) cost += 1.5;
-      return { m, cost, notes: realise(P, m), ch, guide: [3, 4, 10, 11].includes(mod12(iv)) };
+      if (P.ending && !ENDINGS[P.ending].includes(degreeIn(m)) && !(P.ending === 'open' && iv > 12)) cost += 1.5;
+      const notes = realise(P, m);
+      for (let i = 1; i < notes.length; i++) cost += moveCost(Math.abs(notes[i].midi - notes[i - 1].midi)); // the bar's own moves
+      return { cost, notes, ch, guide: [3, 4, 10, 11].includes(mod12(iv)) };
     });
-  });
-  const best = states.map((S) => S.map(() => ({ total: Infinity, from: -1 })));
-  states[0]?.forEach((s, j) => (best[0][j] = { total: s.cost, from: -1 }));
-  for (let i = 1; i < states.length; i++) {
-    const gap = bars_[i].b - bars_[i - 1].b; // a rest between two bars loosens the join
-    states[i].forEach((s, j) => {
-      const changed = s.ch !== states[i - 1][0]?.ch;
-      const own = s.cost - (changed && s.guide ? 0.35 : 0);
+  };
+
+  // The skeleton for one unit: a shortest path through its bars' targets, joined smoothly to the note before. Bars
+  // given as `fixed` (a returning idea) keep their notes.
+  const solve = (Ps, fixed, prev) => {
+    const states = Ps.map((P, i) => (fixed[i] ? [{ cost: 0, notes: fixed[i], ch: chordAt(P.b * 4 + P.notes[0].slot / 2), guide: false }] : candidates(P, contours[P.u])));
+    const best = states.map((S) => S.map(() => ({ total: Infinity, from: -1 })));
+    const join = (s, last, gap) => (last === null ? 0 : moveCost(Math.abs(s.notes[0].midi - last)) * (gap > 1 ? 0.5 : 1));
+    states[0].forEach((s, j) => (best[0][j] = { total: s.cost + join(s, prev?.midi ?? null, prev ? Ps[0].b - prev.b : 1), from: -1 }));
+    for (let i = 1; i < states.length; i++) states[i].forEach((s, j) => {
+      const own = s.cost - (s.ch !== states[i - 1][0].ch && s.guide ? 0.35 : 0);
       states[i - 1].forEach((p, k) => {
-        const join = moveCost(Math.abs(s.m - p.notes[p.notes.length - 1].midi)) * (gap > 1 ? 0.5 : 1);
-        const total = best[i - 1][k].total + join + own;
+        const total = best[i - 1][k].total + join(s, p.notes[p.notes.length - 1].midi, Ps[i].b - Ps[i - 1].b) + own;
         if (total < best[i][j].total) best[i][j] = { total, from: k };
       });
     });
-  }
-  const path = [];
-  if (states.length) {
+    const path = [];
     let j = best[best.length - 1].reduce((bi, x, k, a) => (x.total < a[bi].total ? k : bi), 0);
-    for (let i = states.length - 1; i >= 0; i--) { path[i] = states[i][j]; j = best[i][j].from; }
+    for (let i = states.length - 1; i >= 0; i--) { path[i] = states[i][j].notes; j = best[i][j].from; }
+    return path;
+  };
+
+  // The hook first, then each later unit, bringing back the hook's idea bars where the chords under them repeat.
+  const written = new Map(), returned = new Set(), sameUnder = (P, Q) => P.notes.every((n) => {
+    const s = n.slot / 2;
+    return chordAt(P.b * 4 + s) === chordAt(Q.b * 4 + s) && voicingAt(P.b * 4 + s) === voicingAt(Q.b * 4 + s);
+  });
+  let prev = null;
+  for (let u = 0; u < units; u++) {
+    const Ps = plan.filter((P) => P.u === u);
+    const fixed = Ps.map((P) => {
+      const first = u > 0 && returns && !P.answer && plan.find((Q) => Q.u === 0 && Q.j === P.j && !Q.answer);
+      return first && sameUnder(first, P) ? written.get(first) : null;
+    });
+    Ps.forEach((P, i) => fixed[i] && returned.add(P));
+    solve(Ps, fixed, prev).forEach((notes, i) => written.set(Ps[i], notes));
+    const lastBar = Ps[Ps.length - 1], n = written.get(lastBar);
+    prev = { midi: n[n.length - 1].midi, b: lastBar.b };
   }
 
-  // Out to notes. A cadence bar with another bar after it gets a pickup: a step next to the next target.
+  // One peak: the section's top note sounds once, in its second half. Of the notes there that may move (not an
+  // ending, not in a returning idea bar), the one whose lift to it adds the least motion to its neighbours rises to
+  // the lowest chord note above everything else, if the band leaves room.
+  if (closing.ending === 'closed') {
+    const line = plan.flatMap((P) => written.get(P).map((n, i) => ({ n, P, end: P.answer && i === P.notes.length - 1 })));
+    let best = null;
+    line.forEach((x, i) => {
+      const beat = x.P.b * 4 + x.n.slot / 2;
+      if (beat < bars * 2 || x.end || returned.has(x.P)) return;
+      const others = Math.max(...line.filter((y) => y !== x).map((y) => y.n.midi)), v = voicingAt(beat), tones = tonesOf(chordAt(beat));
+      let m = x.n.midi > others ? x.n.midi : null;
+      for (let c = others + 1; m === null && c <= hi + 2; c++) if (tones.includes(mod12(c)) && !rubs(c, v)) m = c;
+      if (m === null) return;
+      const cost = [line[i - 1], line[i + 1]].filter(Boolean).reduce((s, y) => s + moveCost(Math.abs(m - y.n.midi)) - moveCost(Math.abs(x.n.midi - y.n.midi)), 0);
+      if (!best || cost < best.cost) best = { cost, x, m };
+    });
+    if (best) best.x.n.midi = best.m;
+  }
+
+  // Out to notes.
   const out = [];
-  path.forEach((s, i) => {
-    const P = bars_[i], next = path[i + 1];
-    for (const n of s.notes) {
+  for (const P of plan) {
+    const notes = written.get(P);
+    notes.forEach((n, i) => {
       const pos = (n.midi - lo) / Math.max(1, hi - lo);
-      out.push({ beat: P.b * 4 + n.slot / 2, len: (n.len / 2) * 0.92, midi: n.midi, vel: n.cadence ? 0.7 : 0.62 + 0.22 * pos + (n === s.notes[0] ? 0.06 : 0) });
-    }
-    if (s.notes[0].cadence && next && bars_[i + 1].b === P.b + 1) {
-      const beat = P.b * 4 + 3.5, ch = chordAt(beat);
-      const side = next.m >= s.m ? -1 : 1, m = stepFrom(next.m, side, ch);
-      if (inBand(m) && !rubs(m, voicingAt(beat)) && m !== next.m) {
-        out[out.length - 1].len = Math.min(out[out.length - 1].len, 3 * 0.92);
-        out.push({ beat, len: 0.46, midi: m, vel: 0.6 });
-      }
-    }
-  });
+      out.push({ beat: P.b * 4 + n.slot / 2, len: (n.len / 2) * 0.92, midi: n.midi, vel: n.end ? 0.7 : 0.62 + 0.22 * pos + (i === 0 ? 0.06 : 0), end: P.answer && i === notes.length - 1 });
+    });
+  }
   return out;
+}
+
+// A later statement that changes one thing: its last note becomes the other closed degree, is held on into the
+// bar after, or arrives an eighth early. Each is tried in a random order; one that won't fit is skipped.
+export function vary(R, notes, { key, mode, band: [lo, hi], chordAt, voicingAt, bars }) {
+  const out = notes.map((n) => ({ ...n })), last = out[out.length - 1], before = out[out.length - 2];
+  const fits = (m, beat) => m >= lo && m <= hi && !rubs(m, voicingAt(beat));
+  const ways = {
+    other: () => {
+      const want = MODES[mode].indexOf(mod12(last.midi - key)) === 0 ? 2 : 0; // degree 1 ↔ 3
+      const pc = mod12(key + MODES[mode][want]), ch = chordAt(last.beat);
+      const m = [0, -1, 1, -2, 2, -3, 3, -4, 4].map((d) => last.midi + d).find((x) => mod12(x) === pc && x !== last.midi);
+      if (m === undefined || !fits(m, last.beat) || !chordPcs(key + ch.root, ch.q).includes(pc)) return false;
+      last.midi = m;
+      return true;
+    },
+    hold: () => {
+      const end = last.beat + last.len + 4;
+      if (end > bars * 4 - 0.5) return false;
+      last.len += 4 * 0.92;
+      return true;
+    },
+    early: () => {
+      const beat = last.beat - 0.5;
+      if (!before || before.beat + before.len > beat || !fits(last.midi, beat)) return false;
+      last.beat = beat; last.len += 0.5;
+      return true;
+    },
+  };
+  const pool = Object.keys(ways);
+  while (pool.length) if (ways[pool.splice(Math.floor(R.next() * pool.length), 1)[0]]()) break;
+  return out;
+}
+
+// Two eighths on the last beat before a section, stepping onto its melody's first note: a pickup into the lead's
+// entrance. Returns [] if they won't fit the chord under them.
+export function pickupInto(first, { key, band: [lo, hi], chord, voicing, from }) {
+  const pcs = (chord.scale ?? QUALITIES[chord.q]).map((x) => mod12(key + chord.root + x));
+  const scale = [];
+  for (let m = lo - 3; m <= hi + 3; m++) if (pcs.includes(mod12(m))) scale.push(m);
+  const i = scale.findIndex((m) => m >= first), side = first - lo > hi - first ? -1 : 1; // from below near the top of the band
+  const notes = [scale[i + 2 * side], scale[i + side]];
+  if (notes.some((m) => m === undefined || m < lo || m > hi || rubs(m, voicing))) return [];
+  return notes.map((midi, k) => ({ beat: from + k * 0.5, len: 0.46, midi, vel: 0.58 }));
 }

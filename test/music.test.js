@@ -23,6 +23,20 @@ test('each part has its own random stream: changing the sounds leaves the chords
   }
 });
 
+test("changing a station's melody characters changes the melody and leaves the backing alone", () => {
+  const st = STATIONS[0], other = { ...st, music: { ...st.music, melodies: { soloist: 1 } } };
+  let changed = 0;
+  for (const s of SEEDS.slice(0, 10)) {
+    const a = plan(s, st), b = plan(s, other);
+    assert.deepEqual(a.sections, b.sections);
+    assert.deepEqual(a.chords, b.chords);
+    for (const part of ['drums', 'bass']) assert.deepEqual(a.events[part], b.events[part]);
+    assert.deepEqual(a.events.keys.filter((k) => !k.fill), b.events.keys.filter((k) => !k.fill)); // the fills answer the melody
+    if (JSON.stringify(a.events.lead) !== JSON.stringify(b.events.lead)) changed++;
+  }
+  assert.ok(changed >= 5, `${changed} of 10 melodies changed`);
+});
+
 test("a section's chords cover every beat once, with no gaps or overlaps", () => {
   for (const p of plans) for (const sec of p.sections) {
     const here = p.chords.filter((c) => c.start >= sec.start && c.start < sec.start + sec.bars * 4);
@@ -56,7 +70,7 @@ test("section B never reuses section A's progression", () => {
 test('voicings move smoothly: each voice moves little, and the top note rarely leaps', () => {
   let changes = 0, leaps = 0, move = 0, topMove = 0;
   for (const p of plans) {
-    const vs = p.events.keys.map((k) => k.midis).filter((v, i, a) => i === 0 || v.join() !== a[i - 1].join());
+    const vs = p.events.keys.filter((k) => !k.fill).map((k) => k.midis).filter((v, i, a) => i === 0 || v.join() !== a[i - 1].join());
     for (let i = 1; i < vs.length; i++) {
       const a = vs[i - 1], b = vs[i], d = Math.abs(b[b.length - 1] - a[a.length - 1]);
       changes++; topMove += d; if (d > 4) leaps++;
@@ -69,7 +83,7 @@ test('voicings move smoothly: each voice moves little, and the top note rarely l
 });
 
 test('voicings sit in range, climb upward, and never hold a minor ninth', () => {
-  for (const p of plans) for (const k of p.events.keys) {
+  for (const p of plans) for (const k of p.events.keys.filter((x) => !x.fill)) {
     for (let i = 1; i < k.midis.length; i++) assert.ok(k.midis[i] > k.midis[i - 1]);
     assert.ok(k.midis[0] >= 50 && k.midis[k.midis.length - 1] <= 80, `${k.midis}`);
     for (const a of k.midis) for (const b of k.midis) assert.notEqual(b - a, 13);

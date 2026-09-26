@@ -54,22 +54,55 @@ export function measure(plans) {
   m.rubOnBeat = rubOnBeat / onBeat;
   m.rubAny = rubAny / ln;
 
-  // Repetition: the two A sections' melodies, and a section's drum bars two apart (outside variation and fill bars).
-  let pairs = 0, mSim = 0, dPairs = 0, dSim = 0;
+  // Repetition: a section's drum bars two apart (outside variation and fill bars).
+  let dPairs = 0, dSim = 0;
   for (const p of plans) {
-    const As = p.sections.filter((s) => s.kind === 'A' && s.layers.includes('lead'));
-    if (As.length >= 2) {
-      const rel = (s) => p.events.lead.filter((n) => n.beat >= s.start && n.beat < s.start + s.bars * 4).map((n) => `${(n.beat - s.start).toFixed(2)}:${n.midi}`);
-      pairs++; mSim += jac(rel(As[0]), rel(As[1]));
-    }
     for (const s of p.sections) if (s.layers.includes('drums')) for (let b = 0; b + 2 < s.bars - 1; b++) {
       if (b % 4 === 3 || (b + 2) % 4 === 3) continue;
       const bar = (k) => p.events.drums.filter((e) => e.beat >= s.start + k * 4 && e.beat < s.start + k * 4 + 4).map((e) => `${(e.beat - s.start - k * 4).toFixed(3)}${e.drum}${e.vel}`);
       dPairs++; dSim += jac(bar(b), bar(b + 2));
     }
   }
-  m.melodyShared = mSim / pairs;
   m.drumsShared = dSim / dPairs;
+
+  // Space and hook (MELODY.md §3), over the sections the lead plays apart from the intro. A unit's played bars run
+  // from its start to its first empty bar; all but the last are idea bars, and the last is the answer.
+  const rest = {};
+  let firstPairs = 0, firstSame = 0, ideas = 0, back = 0, peaked = 0, peakable = 0, homes = 0, homeable = 0;
+  const at = (p, t) => p.chords.findLast((c) => c.start <= t + 1e-9);
+  for (const p of plans) {
+    const secs = p.sections.filter((s) => s.kind !== 'intro' && s.layers.includes('lead'));
+    const notesIn = (from, beats) => p.events.lead.filter((n) => n.beat >= from - 1e-9 && n.beat < from + beats - 1e-9);
+    for (const s of secs) {
+      const ns = notesIn(s.start, s.bars * 4), bar = (b) => notesIn(s.start + b * 4, 4);
+      const r = (rest[p.traits.melody] ??= [0, 0]);
+      for (let b = 0; b < s.bars; b++) { r[0]++; if (!bar(b).length) r[1]++; }
+      const played = (u) => { let k = 0; while (k < 4 && u * 4 + k < s.bars && bar(u * 4 + k).length) k++; return k; };
+      const chordsIn = (b) => p.chords.filter((c) => c.start < s.start + b * 4 + 4 && c.start + c.beats > s.start + b * 4)
+        .map((c) => `${Math.max(0, c.start - s.start - b * 4)}:${c.key}:${c.root}:${c.q}`).join();
+      const k0 = played(0);
+      for (let u = 1; u * 4 < s.bars; u++) for (let j = 0; j < Math.min(played(u), k0) - 1; j++) {
+        if (chordsIn(u * 4 + j) !== chordsIn(j)) continue;
+        const a = bar(j), b = bar(u * 4 + j);
+        ideas++;
+        if (a.length === b.length && a.every((n, i) => near(b[i].beat - n.beat, u * 16) && b[i].midi === n.midi)) back++;
+      }
+      if (ns.length > 1) { peakable++; const top = Math.max(...ns.map((n) => n.midi)); if (ns.filter((n) => n.midi === top).length === 1) peaked++; }
+      // a home chord on beat 1 or 3 of a bar the last unit can close in: its 2nd to 4th bar (a break's 2nd or 3rd)
+      const lastU = Math.floor((s.bars - 1) / 4) * 4, reach = s.kind === 'break' ? 2 : 3;
+      const home = [1, 2, 3].some((j) => j <= reach && lastU + j < s.bars && [0, 2].some((o) => at(p, s.start + (lastU + j) * 4 + o).root === 0));
+      if (home && ns.length) {
+        const n = ns[ns.length - 1];
+        homeable++;
+        if (p.chords.some((c) => c.root === 0 && c.start < n.beat + n.len - 1e-9 && c.start + c.beats > n.beat + 1e-9)) homes++;
+      }
+    }
+    const As = secs.filter((s) => s.kind === 'A'), first = (s) => notesIn(s.start, 16).map((n) => `${(n.beat - s.start).toFixed(2)}:${n.midi}`).join();
+    for (let i = 1; i < As.length; i++) { firstPairs++; if (first(As[i]) === first(As[0])) firstSame++; }
+  }
+  m.resting = Object.fromEntries(Object.entries(rest).map(([k, [n, r]]) => [k, r / n]));
+  m.restingRange = [Math.min(...Object.values(m.resting)), Math.max(...Object.values(m.resting))];
+  m.ideasBack = back / ideas; m.peakOnce = peaked / peakable; m.closeHome = homes / homeable; m.firstShared = firstSame / firstPairs;
 
   // Melody shape.
   let iv = 0, steps = 0, leaps = 0, leapsNext = 0, turns = 0;
@@ -114,17 +147,22 @@ export function measure(plans) {
   return m;
 }
 
-// [name, measure, passes, target as written in DESIGN.md]
+// [name, measure, passes, target as written in DESIGN.md or MELODY.md, how to show the measure (a share by default)]
+const range = ([a, b]) => `${Math.round(100 * a)}–${Math.round(100 * b)}%`;
 export const TARGETS = [
   ['hats on swung positions', 'hatsSwung', (x) => x >= 0.35, '≥ 35%'],
   ['bass notes off the kick', 'bassOffKick', (x) => x === 0, 'none'],
   ['melody at or below the keys\' top note', 'leadBelowKeys', (x) => x === 0, '0%'],
   ['melody a semitone above a keys note, on the beat', 'rubOnBeat', (x) => x === 0, '0%'],
-  ['melody shared by the two A sections', 'melodyShared', (x) => x >= 0.95, '≥ 95%'],
   ['drum bars n and n+2 alike', 'drumsShared', (x) => x === 1, '100%'],
-  ['melody moving by step', 'steps', (x) => x >= 0.7, '≥ 70%'],
+  ['melody moving by step', 'steps', (x) => x >= 0.65, '≥ 65%'],
   ['in-key chords coloured outside the mode', 'outOfMode', (x) => x === 0, '0%'],
-  ['keys velocity spread', 'keysVelSpread', (x) => x >= 0.1, '≥ 0.1'],
+  ['keys velocity spread', 'keysVelSpread', (x) => x >= 0.1, '≥ 0.1', (x) => x.toFixed(3)],
+  ['lead-section bars resting, fewest–most by character', 'restingRange', ([a, b]) => a >= 0.35 && b <= 0.55, '35–55%', range],
+  ['idea bars back note for note where the chords repeat', 'ideasBack', (x) => x >= 0.8, '≥ 80%'],
+  ['lead sections whose top note sounds once', 'peakOnce', (x) => x >= 0.9, '≥ 90%'],
+  ['closing notes over a home chord, where one comes', 'closeHome', (x) => x >= 0.9, '≥ 90%'],
+  ['first 4 bars shared by the A sections with the lead', 'firstShared', (x) => x === 1, '100%'],
 ];
 
 // Each station's median and 10–90% range of the critic's melody scores, and of the bars the lead leaves empty in the
@@ -152,11 +190,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const plans = STATIONS.flatMap((st) => Array.from({ length: per }, (_, i) => plan(11 + i * 29, st)));
   const m = measure(plans), pct = (x) => `${(100 * x).toFixed(1)}%`;
   console.log(`${plans.length} plans\n`);
-  for (const [name, k, ok, target] of TARGETS) console.log(`${ok(m[k]) ? 'ok  ' : 'MISS'} ${name.padEnd(48)} ${(k === 'keysVelSpread' ? m[k].toFixed(3) : pct(m[k])).padStart(7)}   target ${target}`);
+  for (const [name, k, ok, target, show = pct] of TARGETS) console.log(`${ok(m[k]) ? 'ok  ' : 'MISS'} ${name.padEnd(52)} ${show(m[k]).padStart(7)}   target ${target}`);
   console.log(`\n     melody a semitone above a keys note, anywhere      ${pct(m.rubAny).padStart(7)}`);
   console.log(`     leaps of a fourth or more                          ${pct(m.leaps).padStart(7)}   turn back after one ${pct(m.turnsAfterLeap)}`);
   console.log(`     phrase peak by quarter                             ${m.peakByQuarter.map(pct).join(' ')}`);
   console.log(`     tracks with one colour per chord kind              ${pct(m.uniformColour).padStart(7)}`);
+  console.log(`     lead-section bars resting, by character            ${Object.entries(m.resting).map(([k, x]) => `${k} ${pct(x)}`).join('  ')}`);
 
   // the melody scores, median [10–90%] per station
   const S = stationScores(plans), cols = ['surprise', 'fit', 'colour', 'anchoring', 'hook', 'exact', 'fresh'];

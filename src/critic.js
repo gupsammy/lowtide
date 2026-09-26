@@ -58,7 +58,7 @@ export function scores(p) {
   let bits = [], counts = { chord: 0, colour: 0, other: 0 }, stepping = 0, anchored = 0, later = 0, hook = 0, exact = 0;
   for (const s of p.sections) {
     const notes = leadIn(p, s);
-    if (s.kind === 'intro' || done.has(s.kind) || notes.length < 2) continue;
+    if (s.kind === 'intro' || !s.layers.includes('lead') || done.has(s.kind) || notes.length < 2) continue; // not a pickup's notes
     done.add(s.kind);
     bits.push(...surprisal(notes, s.key, s.mode));
     notes.forEach((n, i) => {

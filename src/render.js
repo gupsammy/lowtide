@@ -13,7 +13,7 @@ export const TAIL = 3; // room after the section for notes ringing on
 // Each part's level in the dry mix, and how much of it goes to the room (× the track's wet) and the echo.
 const MIX = { keys: 0.8, pad: 0.5, bass: 0.7, lead: 0.62, kick: 1, snare: 0.9, hats: 0.8 };
 const VERB = { keys: 0.9, pad: 1.4, lead: 1, snare: 0.8, hats: 0.3 };
-const ECHO = { lead: 1, keys: 0.2 };
+const ECHO = { lead: 1, keys: 0.2 }; // a lead note's own `echo` scales its send (MELODY.md §3)
 const MASTER = 0.98; // into the deck's glue stage; set so openings measure about -16 LUFS
 
 // Where section i sits in the track, in seconds.
@@ -36,7 +36,7 @@ export function renderSection(p, i, sr, bank, opts = {}) {
   const n = Math.round((PRE + length + TAIL) * sr), t0 = start - PRE, from = sec.start, to = sec.start + sec.bars * 4;
   const within = (e) => e.beat >= from && e.beat < to, at = (e) => e.beat * spb + (e.ms ?? 0) / 1000 - t0;
   const T = p.traits, patch = T.patch, play = (part) => !opts.only || opts.only.includes(part);
-  const lanes = {}, lane = (k) => (lanes[k] ??= stereo(n));
+  const lanes = {}, lane = (k) => (lanes[k] ??= stereo(n)), E = T.space.echo;
 
   // Keys. The top note of a voicing is what the ear follows, so it's played a little stronger and the inner notes
   // a little softer. Each pitch of the electric piano has its own few cents of detune, like a real one's tines.
@@ -56,10 +56,11 @@ export function renderSection(p, i, sr, bank, opts = {}) {
     const o = { t: at(e), len: e.len * spb, midi: e.midi, vel: e.vel, seed: hashString(`${p.seed}:bass:${e.beat}`) };
     (T.bassVoice === 'upright' ? uprightBass : roundBass)(lane('bass').L, lane('bass').R, sr, o);
   }
+  // lead notes that send more or less to the echo go to lanes of their own, named `lead@<factor>`
   if (play('lead')) for (const e of p.events.lead.filter(within)) {
-    const o = { t: at(e), len: e.len * spb, midi: e.midi, vel: e.vel, seed: p.seed };
-    if (T.leadVoice === 'vibes' || T.leadVoice === 'kalimba') sampledNote(lane('lead').L, lane('lead').R, sr, bank, T.leadVoice, { ...o, pan: 0.15 });
-    else note(lane('lead').L, lane('lead').R, sr, { ...o, voice: T.leadVoice });
+    const o = { t: at(e), len: e.len * spb, midi: e.midi, vel: e.vel, seed: p.seed }, b = lane(E && (e.echo ?? 1) !== 1 ? `lead@${e.echo}` : 'lead');
+    if (T.leadVoice === 'vibes' || T.leadVoice === 'kalimba') sampledNote(b.L, b.R, sr, bank, T.leadVoice, { ...o, pan: 0.15 });
+    else note(b.L, b.R, sr, { ...o, voice: T.leadVoice });
   }
   if (play('drums')) {
     const kit = kitFor(p, bank, sr), stems = { kick: lane('kick'), snare: lane('snare'), hats: lane('hats') };
@@ -69,12 +70,13 @@ export function renderSection(p, i, sr, bank, opts = {}) {
   if (lanes.keys && T.keysVoice === 'ep') chorus(lanes.keys, sr, t0);
   if (lanes.keys && sec.fx.sweep) sweep(lanes.keys, sr, PRE, length);
   // everything tonal dips under each kick of the whole track, so a tail from the last section ducks too
-  if (T.space.pump) duck(['keys', 'pad', 'bass', 'lead'].map((k) => lanes[k]).filter(Boolean), sr, t0,
+  if (T.space.pump) duck(Object.keys(lanes).filter((k) => ['keys', 'pad', 'bass', 'lead'].includes(k.split('@')[0])).map((k) => lanes[k]), sr, t0,
     p.events.drums.filter((e) => e.drum === 'kick').map((e) => e.beat * spb + e.ms / 1000), T.space.pump);
 
-  const out = { dry: stereo(n), verb: stereo(n), echo: stereo(n) }, wet = T.space.wet, E = T.space.echo;
-  for (const [k, b] of Object.entries(lanes)) {
-    const gains = [[out.dry, MIX[k]], [out.verb, (VERB[k] ?? 0) * wet], [out.echo, E ? (ECHO[k] ?? 0) * E.send : 0]].filter(([, g]) => g);
+  const out = { dry: stereo(n), verb: stereo(n), echo: stereo(n) }, wet = T.space.wet;
+  for (const [key, b] of Object.entries(lanes)) {
+    const [k, factor = 1] = key.split('@');
+    const gains = [[out.dry, MIX[k]], [out.verb, (VERB[k] ?? 0) * wet], [out.echo, E ? (ECHO[k] ?? 0) * E.send * factor : 0]].filter(([, g]) => g);
     for (const [dst, g] of gains) for (let j = 0; j < n; j++) { dst.L[j] += b.L[j] * g; dst.R[j] += b.R[j] * g; }
   }
   for (const s of Object.values(out)) {
