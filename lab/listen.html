@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>lowtide listening lab</title>
+<style>
+  :root { --bg: #14161a; --card: #1d2026; --line: #2c3038; --text: #e8e4dc; --dim: #9a968e; --accent: #f0a860; --good: #7fc79a; --bad: #e07a6e; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, sans-serif; }
+  header { position: sticky; top: 0; z-index: 2; background: rgba(20,22,26,.94); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  h1 { font-size: 15px; margin: 0 8px 0 0; font-weight: 600; } h1 span { color: var(--dim); font-weight: 400; }
+  select, input, button { font: inherit; color: var(--text); background: var(--card); border: 1px solid var(--line); border-radius: 7px; padding: 6px 10px; }
+  input { width: 110px; } button { cursor: pointer; } button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #1a1208; border-color: var(--accent); font-weight: 600; }
+  .note { color: var(--dim); font-size: 12.5px; flex-basis: 100%; }
+  main { padding: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .card.playing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .title { font-weight: 600; font-size: 15px; } .seed { color: var(--dim); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .facts { display: flex; flex-wrap: wrap; gap: 4px; }
+  .chip { font-size: 11.5px; padding: 1px 7px; border-radius: 99px; border: 1px solid var(--line); color: var(--dim); }
+  .chip.intro { color: var(--accent); border-color: #5a4630; } .chip.standout { color: var(--good); border-color: #2f4a38; }
+  .prog { font-size: 12.5px; color: var(--text); font-variant-numeric: tabular-nums; word-break: break-word; }
+  .prog b { color: var(--dim); font-weight: 400; }
+  canvas { width: 100%; height: 44px; display: block; border-radius: 5px; background: #16181c; cursor: pointer; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .status { color: var(--dim); font-size: 12px; } .status.warn { color: var(--bad); }
+  @media (max-width: 480px) { main { padding: 12px; grid-template-columns: 1fr; } header { padding: 10px 12px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>lowtide <span>listening lab</span></h1>
+  <select id="station" aria-label="station"></select>
+  <input id="seed" aria-label="first seed" inputmode="numeric">
+  <button id="batch">New batch</button>
+  <button id="row" class="primary">Play openings in a row</button>
+  <button id="stop">Stop</button>
+  <div class="note">Ten tracks in radio order, as the critic lets them through. "Play openings in a row" plays the first 8 seconds of each back to back: if two sound alike, the engine has failed. Click a waveform to play that track's first 15 seconds.</div>
+</header>
+<main id="grid"></main>
+<script type="module" src="../src/lab.js"></script>
+</body>
+</html>

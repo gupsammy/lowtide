@@ -1,0 +1,10 @@
+{
+  "name": "lowtide",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "python3 serve.py 8795 .",
+    "test": "node --test test/",
+    "openings": "node tools/openings.js"
+  }
+}
