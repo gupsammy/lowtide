@@ -2,3 +2,5 @@ node_modules/
 .DS_Store
 *.wav
 !samples/*.wav
+renders/
+__pycache__/

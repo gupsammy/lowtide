@@ -5,6 +5,9 @@
   "scripts": {
     "dev": "python3 serve.py 8795 .",
     "test": "node --test test/",
-    "openings": "node tools/openings.js"
+    "openings": "node tools/openings.js",
+    "render": "node tools/render.js",
+    "hear": "python3 tools/hear.py renders",
+    "test:hear": "python3 -m unittest discover tools"
   }
 }
