@@ -13,6 +13,7 @@ node tools/kit.js <raw dir>  # rebuilds samples/ from the raw VCSL files (needs 
 npm run render -- last-train 2026   # renders a lab batch, with stems and plan facts, into renders/
 npm run hear                 # measures everything in renders/ (needs Python with librosa, and ffmpeg)
 npm run test:hear
+npm run judge                # scores everything in renders/ with Meta's Audiobox Aesthetics (needs uv; downloads 415 MB once)
 ```
 
 There is no build step. The code is plain ES modules.
@@ -36,6 +37,6 @@ There is no build step. The code is plain ES modules.
 | `src/meter.js` | Loudness in LUFS, and peak level |
 | `src/wav.js` | Reads and writes WAV files |
 | `samples/` | The sample kit, from the [VCSL](https://github.com/sgossner/VCSL) library (CC0) |
-| `tools/` | Diagnostics, the sample-kit builder, a loader for `samples/` in Node, and the renderer and measures for hearing tracks (`render.js`, `hear.py`) |
+| `tools/` | Diagnostics, the sample-kit builder, a loader for `samples/` in Node, and the renderer and measures for hearing tracks (`render.js`, `hear.py`, `judge.py`) |
 | `lab/listen.html` | Ten tracks to play in full, or opening after opening to hear sameness, with ratings you can export |
 | `lab/styles.html` | The six visual styles we compared |

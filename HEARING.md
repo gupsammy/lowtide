@@ -2,7 +2,7 @@
 
 The plan checks (`tools/diagnose.js`, the critic) test the score: which notes and hits the engine chose. They can't tell whether the rendered audio carries that score to a listener. A melody can be in the right register and still be buried under the chords; a swing can be planned and still sound straight. This round measures the sound itself, with tools that share no code with the engine: librosa and ffmpeg's loudness meter.
 
-What it can't tell is whether a track is lovely. That stays with your ratings. Next comes a trained judge (Meta's Audiobox Aesthetics), which gets checked against your ratings the same way.
+What it can't tell is whether a track is lovely. That stays with your ratings. A trained judge (Meta's Audiobox Aesthetics) was tried as a stand-in; it hears sound quality, not music (see below).
 
 ## Pipeline
 
@@ -42,6 +42,29 @@ Batches with seed 2026: ten each from Last Train and Sunday Porch, five each fro
 - **B doesn't lift.** B is planned at energy 0.75 against A's 0.5–0.62, yet it lands between −1.7 and +2.1 LU of A (median +0.2), and 12 of 30 B sections are quieter than A. B differs from A mostly in harmony.
 - **The "bed" intro is too loud.** All three are as loud as A or louder (+0.2 to +1.8 LU). Every other intro type sits 1–8 LU below A.
 - **Mixes are dark and narrow.** Tilt is −5.9 to −9.0 dB per octave (median −7.8). Stereo correlation is 0.85–0.99, and 13 tracks are at 0.95 or above, close to mono. Loudness is −17.3 to −14.2 LUFS, with 3.9–6.6 dB of peak headroom.
+
+## The trained judge
+
+**`npm run judge`** scores every track in `renders/` with Audiobox Aesthetics (Meta, 2025), a model trained on people's ratings of speech, sound and music. It gives four scores from 1 to 10: CE (content enjoyment), CU (content usefulness), PC (production complexity) and PQ (production quality). It hears 10-second windows; the track's score is their mean. Scores go to `renders/judge.json`, and `hear.py --ratings` sets them beside the other measures.
+
+On the 30 tracks, CE runs from 5.07 to 7.38. The two tracks rated liked so far score 6.77 and 6.54.
+
+**It hears the sound, not the music.** Six tracks were damaged on purpose and scored again. The mean change in CE, and how many of the six dropped:
+
+| Damage | CE | dropped |
+|---|---|---|
+| lead an octave up | −0.04 | 2 |
+| lead a semitone off (wrong notes) | −0.10 | 5 |
+| lead a quarter tone off (out of tune) | −0.08 | 5 |
+| lead removed | −0.08 | 4 |
+| beats shuffled | −0.35 | 5 |
+| low-passed at 800 Hz | −0.50 | 6 |
+| hiss 20 dB under the music | −0.94 | 6 |
+| clipped | −1.59 | 6 |
+
+Wrong notes cost a tenth of a point; clipping costs a point and a half. PQ moves the same way. Across the 30 tracks, CE falls as the texture layer grows (Spearman −0.46) and PQ falls with tape wear (−0.42), so the judge marks down the dust and hiss that lofi wants.
+
+So the judge can't steer the notes. It can guard the sound: a change to the engine that drops CE or PQ by half a point or more has likely broken the mix. Whether it agrees with your taste needs more ratings, with dislikes among them.
 
 ## Tests
 

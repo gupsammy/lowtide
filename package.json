@@ -8,6 +8,7 @@
     "openings": "node tools/openings.js",
     "render": "node tools/render.js",
     "hear": "python3 tools/hear.py renders",
-    "test:hear": "python3 -m unittest discover tools"
+    "test:hear": "python3 -m unittest discover tools",
+    "judge": "uv run --python 3.11 --with audiobox_aesthetics --with soundfile python tools/judge.py renders"
   }
 }

@@ -328,7 +328,8 @@ def hear(folder):
 
 
 def flat(r):
-    return {f'{c}.{k}': v for c, check in r['checks'].items() for k, v in check['values'].items() if v is not None}
+    return {**{f'{c}.{k}': v for c, check in r['checks'].items() for k, v in check['values'].items() if v is not None},
+            **{f'judge.{k}': v for k, v in r.get('judge', {}).items()}}
 
 
 def compare(results, path):
@@ -363,6 +364,12 @@ def main():
     with ProcessPoolExecutor(max_workers=min(len(folders), max(1, (os.cpu_count() or 2) - 2))) as ex:
         results = list(ex.map(hear, folders))
     station_flags(results)
+    judged = folders[0].parent / 'judge.json'  # Audiobox Aesthetics scores from tools/judge.py, if it has run
+    if judged.exists():
+        scores = json.loads(judged.read_text())
+        for r in results:
+            if r['id'] in scores:
+                r['judge'] = {k: v for k, v in scores[r['id']].items() if k != 'windows'}
     (folders[0].parent / 'report.json').write_text(json.dumps(results, indent=1, default=float))
     if a.json:
         print(json.dumps(results, indent=1, default=float))
