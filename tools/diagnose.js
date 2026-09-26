@@ -1,9 +1,10 @@
 // Measures planned tracks against the targets in DESIGN.md ("What must change, in numbers"), plus a few figures that
-// have no target but are worth watching. Reads plans only; no audio.
+// have no target but are worth watching, and each station's melody scores (MELODY.md §1). Reads plans only; no audio.
 //   node tools/diagnose.js [tracks per station]
 import { STATIONS } from '../src/stations.js';
 import { plan } from '../src/plan.js';
 import { MODES, chordPcs, mod12, isMinor } from '../src/theory.js';
+import { scores } from '../src/critic.js';
 
 // Written out here rather than imported from melody.js, so a mistake there can't hide itself from this measure.
 const rubs = (midi, voicing) => voicing.some((v) => mod12(midi - v) === 1);
@@ -126,6 +127,26 @@ export const TARGETS = [
   ['keys velocity spread', 'keysVelSpread', (x) => x >= 0.1, '≥ 0.1'],
 ];
 
+// Each station's median and 10–90% range of the critic's melody scores, and of the bars the lead leaves empty in the
+// sections it plays.
+export function stationScores(plans) {
+  const out = {};
+  for (const p of plans) {
+    const s = scores(p), row = (out[p.station] ??= {});
+    if (s) for (const [k, v] of Object.entries(s)) if (v !== null) (row[k] ??= []).push(v);
+    for (const sec of p.sections) if (sec.layers.includes('lead') && sec.kind !== 'intro') for (let b = 0; b < sec.bars; b++) {
+      const at = sec.start + b * 4;
+      (row.resting ??= []).push(p.events.lead.some((n) => n.beat >= at - 1e-9 && n.beat < at + 4 - 1e-9) ? 0 : 1);
+    }
+  }
+  const q = (xs, f) => [...xs].sort((a, b) => a - b)[Math.round(f * (xs.length - 1))];
+  for (const row of Object.values(out)) for (const k of Object.keys(row)) {
+    const xs = row[k];
+    row[k] = k === 'resting' ? { share: xs.reduce((a, b) => a + b, 0) / xs.length } : { median: q(xs, 0.5), lo: q(xs, 0.1), hi: q(xs, 0.9) };
+  }
+  return out;
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const per = Number(process.argv[2] || 60);
   const plans = STATIONS.flatMap((st) => Array.from({ length: per }, (_, i) => plan(11 + i * 29, st)));
@@ -136,4 +157,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   console.log(`     leaps of a fourth or more                          ${pct(m.leaps).padStart(7)}   turn back after one ${pct(m.turnsAfterLeap)}`);
   console.log(`     phrase peak by quarter                             ${m.peakByQuarter.map(pct).join(' ')}`);
   console.log(`     tracks with one colour per chord kind              ${pct(m.uniformColour).padStart(7)}`);
+
+  // the melody scores, median [10–90%] per station
+  const S = stationScores(plans), cols = ['surprise', 'fit', 'colour', 'anchoring', 'hook', 'exact', 'fresh'];
+  const show = (k, x) => (k === 'surprise' || k === 'fit' ? x.toFixed(2) : pct(x).replace('.0%', '%'));
+  console.log(`\nmelody scores, median [10–90%]; resting: lead-section bars with no lead note`);
+  for (const [station, row] of Object.entries(S)) {
+    console.log(`  ${station.padEnd(13)} ${cols.map((k) => `${k} ${show(k, row[k].median)} [${show(k, row[k].lo)}–${show(k, row[k].hi)}]`).join('  ')}  resting ${pct(row.resting.share)}`);
+  }
 }

@@ -4,3 +4,4 @@ node_modules/
 !samples/*.wav
 renders/
 __pycache__/
+.claude/

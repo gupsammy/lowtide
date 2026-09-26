@@ -3,7 +3,8 @@
 //   lead.wav, harmony.wav (keys, pad, bass), drums.wav, bed.wav (the surface noise alone)
 //                mono stems at 22.05 kHz. They go through the room, the echo and the tape's movement but skip the
 //                saturation, grit and glue, so together they are the mix before those stages.
-//   facts.json   what the plan says the audio should carry: tempo, sections, keys, swing, the lead's band and notes
+//   facts.json   what the plan says the audio should carry: tempo, sections, keys, swing, the lead's band and notes;
+//                and the engine that wrote it, with the critic's melody scores
 //
 //   node tools/render.js <station> <seed> [count]   a lab batch: the tracks the lab shows for that station and seed
 //   node tools/render.js --ratings <file>           the tracks in a ratings export
@@ -11,7 +12,7 @@ import { Worker, isMainThread, parentPort } from 'node:worker_threads';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { availableParallelism } from 'node:os';
 import { STATIONS, stationById } from '../src/stations.js';
-import { nextTrack } from '../src/critic.js';
+import { nextTrack, scores } from '../src/critic.js';
 import { plan } from '../src/plan.js';
 import { deriveSeed } from '../src/rand.js';
 import { renderTrack, sectionSpan, TAIL } from '../src/render.js';
@@ -41,7 +42,7 @@ function whole(p, sr, bank, opts) {
 function facts(p) {
   const spb = 60 / p.bpm, at = (e) => e.beat * spb + (e.ms ?? 0) / 1000, T = p.traits, end = sectionSpan(p, p.sections.length - 1);
   return {
-    station: p.station, seed: p.seed, title: p.title, bpm: p.bpm, seconds: end.start + end.length + TAIL,
+    station: p.station, seed: p.seed, engine: p.engine, scores: scores(p), title: p.title, bpm: p.bpm, seconds: end.start + end.length + TAIL,
     key: T.key, mode: T.mode, scale: scalePcs(T.key, T.mode),
     grid: T.feel.grid, swing: T.feel.swing, hatSwing: T.feel.hatSwing,
     lead: { voice: T.leadVoice, band: [T.lead - 5, T.lead + 7] },

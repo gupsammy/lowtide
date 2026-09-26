@@ -1,6 +1,6 @@
 # lowtide
 
-A radio that writes its own lofi in the browser, from music rules rather than stock progressions, so no two tracks open alike. The plan and its reasons are in [SPEC.md](SPEC.md); how the current round is built is in [DESIGN.md](DESIGN.md); how rendered tracks are measured is in [HEARING.md](HEARING.md).
+A radio that writes its own lofi in the browser, from music rules rather than stock progressions, so no two tracks open alike. The plan and its reasons are in [SPEC.md](SPEC.md); how round 2 is built is in [DESIGN.md](DESIGN.md); the melody round in progress is in [MELODY.md](MELODY.md); how rendered tracks are measured is in [HEARING.md](HEARING.md).
 
 ## Run
 
@@ -8,7 +8,7 @@ A radio that writes its own lofi in the browser, from music rules rather than st
 npm run dev                  # http://localhost:8795/lab/listen.html
 npm test
 npm run openings             # the first seconds of a few tracks per station, with loudness and peak
-node tools/diagnose.js       # measures 240 planned tracks against the targets in DESIGN.md
+node tools/diagnose.js       # measures 240 planned tracks against the targets in DESIGN.md, with each station's melody scores
 node tools/kit.js <raw dir>  # rebuilds samples/ from the raw VCSL files (needs ffmpeg)
 npm run render -- last-train 2026   # renders a lab batch, with stems and plan facts, into renders/
 npm run hear                 # measures everything in renders/ (needs Python with librosa, and ffmpeg)
@@ -28,7 +28,7 @@ There is no build step. The code is plain ES modules.
 | `src/groove.js` | Drum patterns, swing, and how keys and bass sit on the beat |
 | `src/melody.js` | A melody: an idea, a phrase form, a skeleton of chord notes, then decoration |
 | `src/form.js` | Openings, section templates, energy |
-| `src/critic.js` | Checks a plan and re-rolls weak or repeated tracks |
+| `src/critic.js` | Checks a plan and re-rolls weak or repeated tracks; scores its melody for surprise, fit and repetition |
 | `src/stations.js` | Each station's limits |
 | `src/render.js` | A plan's sections → dry, reverb and echo streams, and a whole track streamed section by section |
 | `src/synth/` | Synth voices: electric and felt piano, bell, pad, soft lead and two basses (partly from loop-band) |

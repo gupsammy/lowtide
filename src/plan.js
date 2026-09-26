@@ -10,6 +10,10 @@ import { kickPattern, drumPattern, drumBar, busier, swingBeat, FILLS, COMPS, BAS
 import { idea, writeMelody } from './melody.js';
 import { sections as buildSections } from './form.js';
 
+// Which melody engine wrote the plan. A new engine writes a different melody from the same seed, so ratings and
+// rendered tracks carry this tag (MELODY.md §1).
+export const ENGINE = 'melody-2';
+
 // Each track turns one trait up so it has something you remember it by.
 export const STANDOUTS = { tape: 1, mediant: 1, drag: 1, halftime: 1, strum: 1 };
 
@@ -213,7 +217,7 @@ export function plan(seed, station) {
     tape, intro, form, standout, feel, patch, space,
   };
   const title = `${T.pick(TITLE_A)} ${T.pick(TITLE_B)}`;
-  return { seed, station: station.id, title, bpm, traits, sections: secs, chords, events, cues, lengthBeats: beat };
+  return { seed, station: station.id, engine: ENGINE, title, bpm, traits, sections: secs, chords, events, cues, lengthBeats: beat };
 }
 
 // What the first few seconds of a track are made of: the things that decide whether two openings sound alike.

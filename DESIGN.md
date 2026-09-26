@@ -4,7 +4,9 @@ This round covers Milestone 2 (the sound) and three changes agreed after measuri
 
 **Status:** built, and every target below is met. Where the build departed from the first draft of this file, the text now describes the build.
 
-Later rounds, agreed but not started: the **flip** (chop and resequence a rendered phrase), **bass lines with inversions**, and **call and response with arrangement moments** (drop-outs, tape stops, reverse swells). **Search with a musicality score** waits until the lab has ratings to check it against.
+Round 3, the melody, is in [MELODY.md](MELODY.md).
+
+Later rounds, agreed but not started: the **flip** (chop and resequence a rendered phrase), **bass lines with inversions**, and **call and response with arrangement moments** (drop-outs, tape stops, reverse swells). **Search with a musicality score** waits until the lab has ratings to check it against; MELODY.md adds the first plan scores.
 
 ## What must change, in numbers
 

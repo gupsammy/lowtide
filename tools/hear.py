@@ -324,12 +324,14 @@ def hear(folder):
         'mix': mix_check(mix, sr, I, lra, peak),
     }
     return {'id': folder.name, 'station': f['station'], 'seed': f['seed'], 'title': f['title'], 'bpm': f['bpm'],
-            'key': f"{NOTE_NAMES[f['key']]} {f['mode']}", 'seconds': f['seconds'], 'checks': checks}
+            'key': f"{NOTE_NAMES[f['key']]} {f['mode']}", 'seconds': f['seconds'], 'checks': checks,
+            'plan': {k: v for k, v in (f.get('scores') or {}).items() if v is not None}}
 
 
 def flat(r):
     return {**{f'{c}.{k}': v for c, check in r['checks'].items() for k, v in check['values'].items() if v is not None},
-            **{f'judge.{k}': v for k, v in r.get('judge', {}).items()}}
+            **{f'judge.{k}': v for k, v in r.get('judge', {}).items()},
+            **{f'plan.{k}': v for k, v in r.get('plan', {}).items()}}
 
 
 def compare(results, path):

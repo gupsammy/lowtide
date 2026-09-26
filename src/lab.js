@@ -2,7 +2,7 @@
 // the openings play back to back, so sameness can be heard rather than argued about; and tracks are rated, so taste
 // can be measured rather than guessed.
 import { STATIONS, stationById } from './stations.js';
-import { nextTrack } from './critic.js';
+import { nextTrack, scores } from './critic.js';
 import { opening } from './plan.js';
 import { deriveSeed } from './rand.js';
 import { NOTE_NAMES } from './theory.js';
@@ -17,15 +17,22 @@ const params = new URLSearchParams(location.search);
 const sr = 44100;
 let ctx, batchId = 0;
 
-// Ratings stay in this browser, keyed by station and seed, so rating a track again replaces the old rating. Each
-// keeps the track's traits and opening, so the ratings can later be read against what the engine chose.
+// Ratings stay in this browser, keyed by engine, station and seed, so rating a track again replaces the old rating;
+// a new engine writes a different melody from the same seed, so its rating is kept apart. Each keeps the track's
+// traits, opening and melody scores, so the ratings can later be read against what the engine chose.
 const KEY = 'lowtide.ratings', TAGS = ['lovely', 'stiff', 'muddy', 'samey', 'busy', 'boring'];
-const ratings = (() => { try { return JSON.parse(localStorage.getItem(KEY)) ?? {}; } catch { return {}; } })();
+const ratings = (() => {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY)) ?? {}; } catch {}
+  // ratings saved before engines were tagged are melody-2's
+  return Object.fromEntries(Object.entries(saved).map(([id, r]) => (r.engine ? [id, r] : [`melody-2:${id}`, { ...r, engine: 'melody-2' }])));
+})();
+const ratingId = (p) => `${p.engine}:${p.station}:${p.seed}`;
 function rate(p, change) {
-  const id = `${p.station}:${p.seed}`, r = { rating: 0, tags: [], ...ratings[id] };
+  const id = ratingId(p), r = { rating: 0, tags: [], ...ratings[id] };
   change(r);
   if (!r.rating && !r.tags.length) delete ratings[id];
-  else ratings[id] = { ...r, station: p.station, seed: p.seed, title: p.title, traits: p.traits, opening: opening(p), at: new Date().toISOString() };
+  else ratings[id] = { ...r, engine: p.engine, station: p.station, seed: p.seed, title: p.title, traits: p.traits, opening: opening(p), scores: scores(p), at: new Date().toISOString() };
   try { localStorage.setItem(KEY, JSON.stringify(ratings)); } catch {}
   counted();
   return ratings[id] ?? { rating: 0, tags: [] };
@@ -229,7 +236,7 @@ function showPlaying() {
 const KEYS = { ep: 'electric piano', felt: 'felt piano', upright: 'upright piano' };
 const clock = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 function cardFor(tr, problems, i) {
-  const p = tr.plan, t = p.traits, S = t.space, el = document.createElement('article');
+  const p = tr.plan, t = p.traits, S = t.space, melody = scores(p), el = document.createElement('article');
   el.className = 'card';
   const chip = (text, cls = '') => `<span class="chip ${cls}">${text}</span>`;
   el.innerHTML = `
@@ -238,6 +245,7 @@ function cardFor(tr, problems, i) {
       ${chip(KEYS[t.keysVoice])}${chip(`lead: ${t.leadVoice}`)}${chip(`${t.bassVoice} bass`)}${chip(`${t.kit} kit`)}${chip(`${t.family} beat, ${t.feel.grid}ths swung ${Math.round(t.feel.swing * 100)}%`)}
       ${chip(t.voicing)}${chip(t.comp === t.compB ? t.comp : `${t.comp}, B ${t.compB}`)}${chip(`melody: ${t.phrase}`)}${S.echo ? chip('echo') : ''}${S.grit ? chip(`${S.grit.bits}-bit`) : ''}${S.texture ? chip('ocean bed') : ''}</div>
     <div class="prog"><b>A</b> ${t.shape} <b>· B</b> ${t.shapeB}${t.shift !== 'none' ? ` <b>(${t.shift})</b>` : ''}</div>
+    ${melody ? `<div class="prog"><b>melody</b> surprise ${melody.surprise.toFixed(2)} bits <b>·</b> fit ${melody.fit.toFixed(2)} <b>·</b> new bars ${Math.round(100 * melody.fresh)}%</div>` : ''}
     <canvas width="600" height="112" aria-label="the whole track: click to play from there"></canvas>
     <div class="row"><span class="status">rendering the opening…</span><span class="time"></span><button class="play">Play</button></div>
     <div class="rate"><button class="vote" data-v="1" aria-label="like">👍</button><button class="vote" data-v="-1" aria-label="dislike">👎</button>
@@ -254,7 +262,7 @@ function cardFor(tr, problems, i) {
     const tag = b.dataset.tag;
     r.tags = r.tags.includes(tag) ? r.tags.filter((x) => x !== tag) : [...r.tags, tag];
   }))));
-  pressed(ratings[`${p.station}:${p.seed}`] ?? { rating: 0, tags: [] });
+  pressed(ratings[ratingId(p)] ?? { rating: 0, tags: [] });
 
   // The waveform spans the whole track: one column per slice of time, drawn as its audio arrives, with the sections
   // marked above it so what's heard can be matched to the form.
