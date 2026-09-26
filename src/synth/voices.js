@@ -76,6 +76,17 @@ function bell(L, R, sr, o, V) {
   }
 }
 
+// The keys' sines and fades are stepped on from one sample to the next rather than worked out afresh, which is
+// several times faster: a sine at a fixed pitch is a point (cos, sin) turned round a circle by the same small angle
+// every sample, a fade is multiplied by the same factor. Rounding in those steps would build up over a long note, so
+// every SYNC samples each is reset from its exact formula, and the sound stays the same to within rounding.
+const SYNC = 4096;
+class Phasor {
+  constructor(w) { this.cw = Math.cos(w); this.sw = Math.sin(w); this.c = 1; this.s = 0; }
+  set(ph) { this.c = Math.cos(ph); this.s = Math.sin(ph); }
+  step() { const c = this.c; this.c = c * this.cw - this.s * this.sw; this.s = this.s * this.cw + c * this.sw; }
+}
+
 // Electric piano, by FM as in the Rhodes-like DX7 patches: a sine whose phase is pushed by a second sine at the same
 // pitch (the warm "body", bright at the strike and mellowing), plus a short high tine at 14× the pitch. Hit hard, it
 // barks: the tone saturates. Each note sits a few cents off true (o.detune), as the tines of a real one do. A slow
@@ -84,15 +95,25 @@ export function ep(L, R, sr, o, patch) {
   const f = mtof(o.midi) * Math.pow(2, (o.detune ?? 0) / 1200), i0 = Math.round(o.t * sr), n = Math.round((o.len + 0.35) * sr);
   const bark = 1 + 1.6 * o.vel * o.vel * patch.bright;
   const decay = 0.9 + 1.8 * Math.exp(-(o.midi - 48) / 18), cut = 1400 + 3000 * patch.bright, a = Math.exp((-TAU * cut) / sr);
-  let pc = 0, pm = 0, pt = 0, lp = 0;
+  // the pushing sine starts with the carrier and keeps its pitch, so the two share one phase (pc)
+  const mod = new Phasor(TAU * (f / sr)), tn = new Phasor(TAU * ((14 * f) / sr)), sway = new Phasor((TAU * patch.tremRate) / sr);
+  const kIdx = Math.exp(-1 / (0.3 * sr)), kTine = Math.exp(-1 / (0.025 * sr)), kAmp = Math.exp(-1 / (decay * sr)), kRel = Math.exp(-1 / (0.09 * sr));
+  let pc = 0, pt = 0, lp = 0, eIdx = 0, eTine = 0, eAmp = 0, rel = 0;
   for (let i = 0; i < n && i0 + i < L.length; i++) {
-    const t = i / sr;
-    pc += f / sr; pm += f / sr; pt += (14 * f) / sr;
-    const index = (0.25 + 1.3 * patch.bright * o.vel) * Math.exp(-t / 0.3) + 0.25;
-    const tine = Math.sin(TAU * pt) * 0.22 * patch.bright * Math.exp(-t / 0.025);
-    const amp = Math.min(1, t / 0.002) * Math.exp(-t / decay) * (t > o.len ? Math.exp(-(t - o.len) / 0.09) : 1);
-    lp = (1 - a) * (Math.sin(TAU * pc + index * Math.sin(TAU * pm)) + tine) + a * lp;
-    const trem = Math.sin(TAU * patch.tremRate * (o.t + t)) * patch.tremDepth;
+    const t = i / sr, sync = i % SYNC === 0;
+    pc += f / sr; pt += (14 * f) / sr;
+    if (sync) {
+      mod.set(TAU * pc); tn.set(TAU * pt); sway.set(TAU * patch.tremRate * (o.t + t));
+      eIdx = Math.exp(-t / 0.3); eTine = Math.exp(-t / 0.025); eAmp = Math.exp(-t / decay);
+    } else { mod.step(); tn.step(); sway.step(); eIdx *= kIdx; eTine *= kTine; eAmp *= kAmp; }
+    // once the key is let go, the fade starts from its exact value (rel is still 0), then steps on
+    if (t > o.len) rel = rel && !sync ? rel * kRel : Math.exp(-(t - o.len) / 0.09);
+    const index = (0.25 + 1.3 * patch.bright * o.vel) * eIdx + 0.25;
+    const tine = tn.s * 0.22 * patch.bright * eTine;
+    const amp = Math.min(1, t / 0.002) * eAmp * (t > o.len ? rel : 1);
+    // the carrier's phase is pushed about every sample, so it is no fixed sine and keeps its Math.sin
+    lp = (1 - a) * (Math.sin(TAU * pc + index * mod.s) + tine) + a * lp;
+    const trem = sway.s * patch.tremDepth;
     const v = (Math.tanh(lp * bark) / bark) * amp * o.vel * 0.3;
     L[i0 + i] += v * (1 - trem); R[i0 + i] += v * (1 + trem);
   }
@@ -107,16 +128,23 @@ export function felt(L, R, sr, o, patch) {
   const body = 1.2 + 2.5 * Math.exp(-(o.midi - 48) / 16), cut = 600 + (1200 + 2000 * patch.bright) * o.vel * o.vel, a = Math.exp((-TAU * cut) / sr);
   const split = Math.pow(2, (0.8 + 1.2 * r()) / 1200);
   const H = [1, 2, 3, 4, 5, 6].flatMap((k) => [1, split].map((s) => ({ f: f * s * k * Math.sqrt(1 + 0.0004 * k * k), g: 0.5 / Math.pow(k, 1.4), d: body / (1 + 0.6 * (k - 1)), p: r() })));
+  for (const h of H) { h.osc = new Phasor(TAU * (h.f / sr)); h.k = Math.exp(-1 / (h.d * sr)); h.e = 0; } // see SYNC
   const pan = Math.max(-0.5, Math.min(0.5, (o.midi - 62) / 30)), gl = 1 - Math.max(0, pan), gr = 1 + Math.min(0, pan);
-  const thud = Math.exp((-TAU * 1800) / sr);
-  let lp = 0, hn = 0;
+  const thud = Math.exp((-TAU * 1800) / sr), kThud = Math.exp(-1 / (0.012 * sr)), kRel = Math.exp(-1 / (0.12 * sr));
+  let lp = 0, hn = 0, eThud = 0, rel = 0;
   for (let i = 0; i < n && i0 + i < L.length; i++) {
-    const t = i / sr;
+    const t = i / sr, sync = i % SYNC === 0;
     let x = 0;
-    for (const h of H) { h.p += h.f / sr; x += Math.sin(TAU * h.p) * h.g * Math.exp(-t / h.d); }
-    const amp = Math.min(1, t / 0.008) * (t > o.len ? Math.exp(-(t - o.len) / 0.12) : 1);
+    for (const h of H) {
+      h.p += h.f / sr;
+      if (sync) { h.osc.set(TAU * h.p); h.e = Math.exp(-t / h.d); } else { h.osc.step(); h.e *= h.k; }
+      x += h.osc.s * h.g * h.e;
+    }
+    if (t > o.len) rel = rel && !sync ? rel * kRel : Math.exp(-(t - o.len) / 0.12); // as in ep
+    const amp = Math.min(1, t / 0.008) * (t > o.len ? rel : 1);
     hn = (1 - thud) * (r() * 2 - 1) + thud * hn;
-    x += hn * 0.5 * o.vel * Math.exp(-t / 0.012);
+    eThud = sync ? Math.exp(-t / 0.012) : eThud * kThud;
+    x += hn * 0.5 * o.vel * eThud;
     lp = (1 - a) * x + a * lp;
     const v = lp * amp * o.vel * 0.234;
     L[i0 + i] += v * gl; R[i0 + i] += v * gr;

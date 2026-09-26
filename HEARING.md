@@ -11,7 +11,7 @@ What it can't tell is whether a track is lovely. That stays with your ratings. A
    - four mono stems at 22.05 kHz: `lead`, `harmony` (keys, pad, bass), `drums`, and `bed` (the surface noise alone). The stems go through the room, the echo and the tape's movement, but skip the saturation, grit and glue, so together they are the mix before those stages.
    - `facts.json`: what the plan says the audio should carry. Tempo, sections with their times and keys, the swing, every note and hit in seconds, and the chords; also the engine that wrote the plan and the critic's melody scores.
 
-   A track takes 7–23 s to render (the felt piano is the slow part); tracks render in parallel. Each takes about 40 MB of disk.
+   A track takes 8–12 s to render; tracks render in parallel. Each takes about 40 MB of disk.
 2. **`npm run hear`** measures every track in `renders/`, prints a report and writes `renders/report.json`. `python3 tools/hear.py <folders>` measures some of them.
    - `--json` prints the measures.
    - `--ratings <file>` sets the measures of liked tracks beside those of disliked ones, largest gap first. The critic's melody scores (surprise, fit, repetition; see [MELODY.md](MELODY.md)) join them as `plan.*`, read from `facts.json`.
