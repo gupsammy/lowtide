@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { STATIONS } from '../src/stations.js';
 import { plan } from '../src/plan.js';
 import { nextTrack } from '../src/critic.js';
-import { renderSection, renderOpening, sectionSpan } from '../src/render.js';
+import { renderSection, renderOpening, renderTrack, sectionSpan, deckFor, TAIL } from '../src/render.js';
 import { sampledNote, buildKit } from '../src/sampler.js';
 import { lufs, peakDb } from '../src/meter.js';
 import { stereo } from '../src/synth/dsp.js';
@@ -15,6 +15,29 @@ test('a section renders to the same samples every time', () => {
   const p = plan(31, STATIONS[1]);
   const a = renderSection(p, 1, sr, bank), b = renderSection(p, 1, sr, bank);
   assert.equal(a.dry.L.findIndex((v, i) => v !== b.dry.L[i]), -1);
+});
+
+// The reference mixes every section into one track-long buffer and runs the deck once. Streamed, each section's tail
+// must carry into the next chunk: dropped early, it cuts off; added twice, it doubles.
+test('a track streamed section by section equals the same track mixed in one pass', () => {
+  const p = structuredClone(plan(8, STATIONS[2])), opts = { only: ['keys', 'drums'] };
+  p.sections = p.sections.slice(0, 3); // two section changes are enough, and three sections render fast
+  const last = p.sections.length - 1, span = sectionSpan(p, last);
+  const n = Math.round((span.start + span.length + TAIL) * sr), dry = stereo(n), verb = stereo(n), echo = stereo(n);
+  p.sections.forEach((_, i) => {
+    const s = renderSection(p, i, sr, bank, opts), o = Math.round(s.start * sr);
+    for (const [dst, src] of [[dry, s.dry], [verb, s.verb], [echo, s.echo]])
+      for (let j = Math.max(0, -o); j < src.L.length && o + j < n; j++) { dst.L[o + j] += src.L[j]; dst.R[o + j] += src.R[j]; }
+  });
+  const whole = deckFor(p, sr, bank).process(dry, verb, echo), L = new Float32Array(n);
+  let at = 0;
+  for (const c of renderTrack(p, sr, bank, opts)) {
+    assert.equal(c.offset, at, 'a gap or an overlap between chunks');
+    L.set(c.L, c.offset);
+    at += c.L.length;
+  }
+  assert.equal(at, n, 'the chunks stop short of the end');
+  assert.equal(L.findIndex((v, i) => v !== whole.L[i]), -1);
 });
 
 test('openings sit between -20 and -12 LUFS, with peaks under -0.5 dBFS', () => {

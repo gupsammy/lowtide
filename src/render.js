@@ -162,15 +162,32 @@ export function deckFor(p, sr, bank, opts = {}) {
   }, sr);
 }
 
-// The first `seconds` of a track: sections laid end to end with their tails overlapping, through the deck.
-export function renderOpening(p, seconds, sr, bank, opts = {}) {
-  const n = Math.round(seconds * sr), dry = stereo(n), verb = stereo(n), echo = stereo(n);
-  for (let i = 0; i < p.sections.length; i++) {
-    if (sectionSpan(p, i).start - PRE >= seconds) break;
-    const s = renderSection(p, i, sr, bank, opts), o = Math.round(s.start * sr);
-    for (const [dst, src] of [[dry, s.dry], [verb, s.verb], [echo, s.echo]]) {
+// A whole track, one section at a time: sections laid end to end with their tails overlapping, through the deck.
+// Each chunk is finished audio, in order, so playback can start while later sections render. A section's tail rings
+// on into the next, so a chunk ends where the next section's audio begins, and the tail is carried over.
+// Yields { offset, total, L, R }, in samples. opts.seconds: stop there.
+export function* renderTrack(p, sr, bank, opts = {}) {
+  const deck = deckFor(p, sr, bank, opts.deck), last = p.sections.length - 1, span = sectionSpan(p, last);
+  const total = Math.round((span.start + span.length + TAIL) * sr), end = Math.min(total, Math.round((opts.seconds ?? Infinity) * sr));
+  let done = 0, ringing = [];
+  for (let i = 0; done < end; i++) {
+    const s = renderSection(p, i, sr, bank, opts);
+    ringing.push({ ...s, at: Math.round(s.start * sr) });
+    const until = Math.min(end, i < last ? Math.round((sectionSpan(p, i + 1).start - PRE) * sr) : total);
+    const n = until - done, dry = stereo(n), verb = stereo(n), echo = stereo(n);
+    for (const x of ringing) for (const [dst, src] of [[dry, x.dry], [verb, x.verb], [echo, x.echo]]) {
+      const o = x.at - done;
       for (let j = Math.max(0, -o); j < src.L.length && o + j < n; j++) { dst.L[o + j] += src.L[j]; dst.R[o + j] += src.R[j]; }
     }
+    yield { offset: done, total, ...deck.process(dry, verb, echo) };
+    done = until;
+    ringing = ringing.filter((x) => x.at + x.dry.L.length > done);
   }
-  return deckFor(p, sr, bank, opts.deck).process(dry, verb, echo);
+}
+
+// The first `seconds` of a track.
+export function renderOpening(p, seconds, sr, bank, opts = {}) {
+  const n = Math.round(seconds * sr), L = new Float32Array(n), R = new Float32Array(n);
+  for (const c of renderTrack(p, sr, bank, { ...opts, seconds })) { L.set(c.L, c.offset); R.set(c.R, c.offset); }
+  return { L, R };
 }

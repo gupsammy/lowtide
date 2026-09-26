@@ -107,7 +107,7 @@ joined stream (the deck, one unbroken pass, stateful)
   mix ─► head bump ─► saturation ─► wow/flutter ─► roll-off ─► hiss ─► grit ─► vinyl ─► glue compressor ─► soft clip
 ```
 
-Linear effects (chorus, filters, ducking) can run per section, because each is tied to absolute time and linear effects add up. Anything nonlinear (saturation, compression, clipping, crush) runs in the deck, over one unbroken stream. The deck processes any chunk sizes in order and gives the same result as one pass. The radio in Milestone 3 feeds it section by section.
+Linear effects (chorus, filters, ducking) can run per section, because each is tied to absolute time and linear effects add up. Anything nonlinear (saturation, compression, clipping, crush) runs in the deck, over one unbroken stream. The deck processes any chunk sizes in order and gives the same result as one pass, so `renderTrack` feeds it section by section: the lab streams whole tracks this way, and the radio in Milestone 3 will too.
 
 ### The deck, per track (drawn from station ranges)
 
@@ -179,8 +179,11 @@ Linear effects (chorus, filters, ducking) can run per section, because each is t
 - **Loading:** `src/wav.js` parses WAV in plain JS, so the browser worker and the Node tests read samples the same way.
 - **Pitched notes:** the nearest sample (the lower one on a tie) is resampled with cubic interpolation and corrected by its measured tuning. The kit covers every note the plans ask for (the piano's voicings reach down to MIDI 50), so no note shifts more than 3 semitones.
 
-## 7. Ratings in the lab
+## 7. The listening lab
 
+- **Whole tracks:** each card plays its track in full. A worker renders one section at a time and sends each finished chunk, so playback starts within a second. The audio clock runs at the render rate, so chunks play back to back, sample for sample.
+- **Play all** plays the ten tracks in order, rendering the next while one plays. **Openings in a row** plays the first 8 seconds of each, to hear sameness.
+- **The waveform** spans the whole track, fills in as it renders, marks the sections, and seeks on a click.
 - **Rating a track:** each card gets 👍, 👎 and tags: *lovely*, *stiff*, *muddy*, *samey*, *busy*, *boring*. Pressing a button again takes it back.
 - **What's saved:** each rating goes to `localStorage` with the station, seed, title, traits and opening. Rating the same track again replaces the old rating.
 - **Getting the data out:** an Export button saves `lowtide-ratings-<date>.json`. When you listen in the app's browser pane, I can read the ratings directly.
@@ -198,6 +201,7 @@ Linear effects (chorus, filters, ducking) can run per section, because each is t
 - **Kit:** the same seed gives the same kit, and different seeds give different kicks.
 - **Ducking:** the keys dip after each kick and not before it.
 - **Loudness:** openings measure −20 to −12 LUFS with peaks below −0.5 dBFS.
+- **Streaming:** a track rendered section by section equals the same track mixed in one pass, sample for sample.
 - **Variety:** consecutive openings differ in loudness shape or brightness, measured on the audio.
 
 ## 9. Files
