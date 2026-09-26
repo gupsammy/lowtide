@@ -27,6 +27,11 @@
   canvas { width: 100%; height: 44px; display: block; border-radius: 5px; background: #16181c; cursor: pointer; }
   .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
   .status { color: var(--dim); font-size: 12px; } .status.warn { color: var(--bad); }
+  .rate { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; border-top: 1px solid var(--line); padding-top: 8px; }
+  .rate button { padding: 3px 9px; font-size: 12.5px; border-radius: 99px; color: var(--dim); }
+  .rate .vote { font-size: 15px; padding: 2px 10px; }
+  .rate button[aria-pressed="true"] { color: var(--text); border-color: var(--accent); background: #3a2c1c; }
+  .rate .vote[data-v="-1"][aria-pressed="true"] { border-color: var(--bad); background: #3a201e; }
   @media (max-width: 480px) { main { padding: 12px; grid-template-columns: 1fr; } header { padding: 10px 12px; } }
 </style>
 </head>
@@ -38,7 +43,8 @@
   <button id="batch">New batch</button>
   <button id="row" class="primary">Play openings in a row</button>
   <button id="stop">Stop</button>
-  <div class="note">Ten tracks in radio order, as the critic lets them through. "Play openings in a row" plays the first 8 seconds of each back to back: if two sound alike, the engine has failed. Click a waveform to play that track's first 15 seconds.</div>
+  <button id="export">Export ratings</button>
+  <div class="note">Ten tracks in radio order, as the critic lets them through. "Play openings in a row" plays the first 8 seconds of each back to back: if two sound alike, the engine has failed. Click a waveform to play that track's first 15 seconds. Rate with 👍 or 👎 and any tags that fit; ratings stay in this browser until you export them.</div>
 </header>
 <main id="grid"></main>
 <script type="module" src="../src/lab.js"></script>

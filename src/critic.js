@@ -1,7 +1,7 @@
 // Checks a planned track before any sound is made. A plan that fails is re-rolled, so a weak or repeated track is
 // never heard. Every check reads the plan's data; none needs audio.
 import { chordPcs, mod12 } from './theory.js';
-import { clashes } from './melody.js';
+import { rubs } from './melody.js';
 import { plan } from './plan.js';
 import { deriveSeed } from './rand.js';
 
@@ -15,9 +15,15 @@ export function review(p, station, recent = []) {
   const lead = p.events.lead.map((n) => n.midi);
   if (lead.length && Math.max(...lead) - Math.min(...lead) > 19) problems.push('melody spans more than a twelfth');
   for (const n of p.events.lead) {
-    if (n.beat % 1 !== 0) continue;
-    const c = chordAt(p, n.beat), tones = chordPcs(c.key + c.root, c.q).map(mod12);
-    if (clashes(n.midi, tones, c.q)) { problems.push(`melody note grinds against ${c.roman}${c.q} at beat ${n.beat}`); break; }
+    const k = p.events.keys.find((k) => k.beat <= n.beat + 1e-9 && n.beat < k.beat + k.len);
+    if (!k) continue;
+    if (n.midi <= Math.max(...k.midis)) { problems.push(`melody sinks into the chord at beat ${n.beat.toFixed(2)}`); break; }
+    if (rubs(n.midi, k.midis)) { problems.push(`melody note grinds against the keys at beat ${n.beat.toFixed(2)}`); break; }
+  }
+  for (const n of p.events.lead) {
+    if (n.beat % 2 !== 0) continue; // beats 1 and 3 of the bar
+    const c = chordAt(p, n.beat);
+    if (!chordPcs(c.key + c.root, c.q).includes(mod12(n.midi))) { problems.push(`melody leaves ${c.roman}${c.q} on a strong beat (${n.beat})`); break; }
   }
   for (const k of p.events.keys) {
     if (k.midis.some((m, i) => i && m <= k.midis[i - 1])) { problems.push('a voicing has crossed or doubled notes'); break; }

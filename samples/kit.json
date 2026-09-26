@@ -1,0 +1,396 @@
+{
+ "sr": 22050,
+ "source": "VCSL (CC0), github.com/sgossner/VCSL",
+ "samples": [
+  {
+   "id": "upright-C2",
+   "file": "upright-C2.wav",
+   "inst": "upright",
+   "midi": 48,
+   "seconds": 4,
+   "tune": -9,
+   "gain": -6.5
+  },
+  {
+   "id": "upright-G2",
+   "file": "upright-G2.wav",
+   "inst": "upright",
+   "midi": 55,
+   "seconds": 4,
+   "tune": -3,
+   "gain": -4.8
+  },
+  {
+   "id": "upright-C3",
+   "file": "upright-C3.wav",
+   "inst": "upright",
+   "midi": 60,
+   "seconds": 4,
+   "tune": 0,
+   "gain": -5.1
+  },
+  {
+   "id": "upright-G3",
+   "file": "upright-G3.wav",
+   "inst": "upright",
+   "midi": 67,
+   "seconds": 4,
+   "tune": 0,
+   "gain": 0.2
+  },
+  {
+   "id": "upright-C4",
+   "file": "upright-C4.wav",
+   "inst": "upright",
+   "midi": 72,
+   "seconds": 4,
+   "tune": -3,
+   "gain": -1
+  },
+  {
+   "id": "upright-G4",
+   "file": "upright-G4.wav",
+   "inst": "upright",
+   "midi": 79,
+   "seconds": 4,
+   "tune": -2,
+   "gain": -0.5
+  },
+  {
+   "id": "upright-C5",
+   "file": "upright-C5.wav",
+   "inst": "upright",
+   "midi": 84,
+   "seconds": 4,
+   "tune": -3,
+   "gain": 1.7
+  },
+  {
+   "id": "upright-G5",
+   "file": "upright-G5.wav",
+   "inst": "upright",
+   "midi": 91,
+   "seconds": 3.834,
+   "tune": 2,
+   "gain": -0.5
+  },
+  {
+   "id": "vibes-F2",
+   "file": "vibes-F2.wav",
+   "inst": "vibes",
+   "midi": 53,
+   "seconds": 3,
+   "tune": -6,
+   "gain": -4
+  },
+  {
+   "id": "vibes-A2",
+   "file": "vibes-A2.wav",
+   "inst": "vibes",
+   "midi": 57,
+   "seconds": 3,
+   "tune": 0,
+   "gain": -7.6
+  },
+  {
+   "id": "vibes-C3",
+   "file": "vibes-C3.wav",
+   "inst": "vibes",
+   "midi": 60,
+   "seconds": 3,
+   "tune": 0,
+   "gain": -12.9
+  },
+  {
+   "id": "vibes-E3",
+   "file": "vibes-E3.wav",
+   "inst": "vibes",
+   "midi": 64,
+   "seconds": 3,
+   "tune": 0,
+   "gain": -11.7
+  },
+  {
+   "id": "vibes-G3",
+   "file": "vibes-G3.wav",
+   "inst": "vibes",
+   "midi": 67,
+   "seconds": 3,
+   "tune": 0,
+   "gain": -11.1
+  },
+  {
+   "id": "vibes-B3",
+   "file": "vibes-B3.wav",
+   "inst": "vibes",
+   "midi": 71,
+   "seconds": 3,
+   "tune": 0,
+   "gain": -12.5
+  },
+  {
+   "id": "vibes-D4",
+   "file": "vibes-D4.wav",
+   "inst": "vibes",
+   "midi": 74,
+   "seconds": 3,
+   "tune": 0,
+   "gain": -11.5
+  },
+  {
+   "id": "vibes-F4",
+   "file": "vibes-F4.wav",
+   "inst": "vibes",
+   "midi": 77,
+   "seconds": 3,
+   "tune": 0,
+   "gain": -10.6
+  },
+  {
+   "id": "vibes-A4",
+   "file": "vibes-A4.wav",
+   "inst": "vibes",
+   "midi": 81,
+   "seconds": 3,
+   "tune": 0,
+   "gain": -11.4
+  },
+  {
+   "id": "vibes-C5",
+   "file": "vibes-C5.wav",
+   "inst": "vibes",
+   "midi": 84,
+   "seconds": 3,
+   "tune": 0,
+   "gain": -10.1
+  },
+  {
+   "id": "vibes-E5",
+   "file": "vibes-E5.wav",
+   "inst": "vibes",
+   "midi": 88,
+   "seconds": 3,
+   "tune": 0,
+   "gain": -10.5
+  },
+  {
+   "id": "kalimba-B2",
+   "file": "kalimba-B2.wav",
+   "inst": "kalimba",
+   "midi": 59,
+   "seconds": 2.5,
+   "tune": -9,
+   "gain": 5.4
+  },
+  {
+   "id": "kalimba-Cs3",
+   "file": "kalimba-Cs3.wav",
+   "inst": "kalimba",
+   "midi": 61,
+   "seconds": 2.5,
+   "tune": 20,
+   "gain": 1.4
+  },
+  {
+   "id": "kalimba-Ds3",
+   "file": "kalimba-Ds3.wav",
+   "inst": "kalimba",
+   "midi": 63,
+   "seconds": 2.5,
+   "tune": -5,
+   "gain": 2.6
+  },
+  {
+   "id": "kalimba-Fs3",
+   "file": "kalimba-Fs3.wav",
+   "inst": "kalimba",
+   "midi": 66,
+   "seconds": 2.5,
+   "tune": -1,
+   "gain": 0.9
+  },
+  {
+   "id": "kalimba-Gs3",
+   "file": "kalimba-Gs3.wav",
+   "inst": "kalimba",
+   "midi": 68,
+   "seconds": 2.5,
+   "tune": 25,
+   "gain": 2.8
+  },
+  {
+   "id": "kalimba-B3",
+   "file": "kalimba-B3.wav",
+   "inst": "kalimba",
+   "midi": 71,
+   "seconds": 2.5,
+   "tune": 19,
+   "gain": 0.9
+  },
+  {
+   "id": "kalimba-Cs4",
+   "file": "kalimba-Cs4.wav",
+   "inst": "kalimba",
+   "midi": 73,
+   "seconds": 2.5,
+   "tune": 20,
+   "gain": -1.2
+  },
+  {
+   "id": "kalimba-Ds4",
+   "file": "kalimba-Ds4.wav",
+   "inst": "kalimba",
+   "midi": 75,
+   "seconds": 2.5,
+   "tune": 28,
+   "gain": 4.8
+  },
+  {
+   "id": "kalimba-Fs4",
+   "file": "kalimba-Fs4.wav",
+   "inst": "kalimba",
+   "midi": 78,
+   "seconds": 2.5,
+   "tune": 36,
+   "gain": 1.3
+  },
+  {
+   "id": "kalimba-A4",
+   "file": "kalimba-A4.wav",
+   "inst": "kalimba",
+   "midi": 81,
+   "seconds": 2.5,
+   "tune": -37,
+   "gain": 6
+  },
+  {
+   "id": "kalimba-B4",
+   "file": "kalimba-B4.wav",
+   "inst": "kalimba",
+   "midi": 83,
+   "seconds": 2.5,
+   "tune": 0,
+   "gain": 9.5
+  },
+  {
+   "id": "hat-closed-1",
+   "file": "hat-closed-1.wav",
+   "inst": "hat",
+   "seconds": 0.35
+  },
+  {
+   "id": "hat-closed-2",
+   "file": "hat-closed-2.wav",
+   "inst": "hat",
+   "seconds": 0.35
+  },
+  {
+   "id": "hat-closed-3",
+   "file": "hat-closed-3.wav",
+   "inst": "hat",
+   "seconds": 0.35
+  },
+  {
+   "id": "hat-pedal",
+   "file": "hat-pedal.wav",
+   "inst": "hat",
+   "seconds": 0.3
+  },
+  {
+   "id": "hat-open",
+   "file": "hat-open.wav",
+   "inst": "open",
+   "seconds": 1.1
+  },
+  {
+   "id": "hat-loose",
+   "file": "hat-loose.wav",
+   "inst": "open",
+   "seconds": 0.6
+  },
+  {
+   "id": "snare-1",
+   "file": "snare-1.wav",
+   "inst": "snare",
+   "seconds": 0.7
+  },
+  {
+   "id": "snare-2",
+   "file": "snare-2.wav",
+   "inst": "snare",
+   "seconds": 0.7
+  },
+  {
+   "id": "snare-3",
+   "file": "snare-3.wav",
+   "inst": "snare",
+   "seconds": 0.7
+  },
+  {
+   "id": "snare-4",
+   "file": "snare-4.wav",
+   "inst": "snare",
+   "seconds": 0.7
+  },
+  {
+   "id": "rim",
+   "file": "rim.wav",
+   "inst": "rim",
+   "seconds": 0.4
+  },
+  {
+   "id": "snare-tap",
+   "file": "snare-tap.wav",
+   "inst": "tap",
+   "seconds": 0.4
+  },
+  {
+   "id": "shaker-1",
+   "file": "shaker-1.wav",
+   "inst": "shaker",
+   "seconds": 0.265
+  },
+  {
+   "id": "shaker-2",
+   "file": "shaker-2.wav",
+   "inst": "shaker",
+   "seconds": 0.264
+  },
+  {
+   "id": "shaker-3",
+   "file": "shaker-3.wav",
+   "inst": "shaker",
+   "seconds": 0.182
+  },
+  {
+   "id": "shaker-4",
+   "file": "shaker-4.wav",
+   "inst": "shaker",
+   "seconds": 0.3
+  },
+  {
+   "id": "clap-1",
+   "file": "clap-1.wav",
+   "inst": "clap",
+   "seconds": 0.6
+  },
+  {
+   "id": "clap-2",
+   "file": "clap-2.wav",
+   "inst": "clap",
+   "seconds": 0.6
+  },
+  {
+   "id": "clap-3",
+   "file": "clap-3.wav",
+   "inst": "clap",
+   "seconds": 0.6
+  },
+  {
+   "id": "ocean",
+   "file": "ocean.wav",
+   "inst": "ocean",
+   "seconds": 11
+  }
+ ]
+}

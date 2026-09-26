@@ -51,12 +51,13 @@ function movement(v, prev) {
   return cost + 2 * Math.max(0, leap - 5);
 }
 
-// chord: { root (from the key), q }; key: tonic pitch class; center: the register the hands lean towards.
-export function voice(chord, key, style, prev, center) {
+// chord: { root (from the key), q }; key: tonic pitch class; center: the register the hands lean towards;
+// ceiling: the highest note allowed, which keeps the hands under the melody.
+export function voice(chord, key, style, prev, center, ceiling = HIGH) {
   const V = VOICINGS[style], t = chordTones(chord.q);
   const ivs = [...new Set(V.notes(t).map((x) => mod12(x)))];
   const pcs = ivs.map((x) => mod12(key + chord.root + x));
-  const lo = Math.max(LOW, Math.round(center) - 12), hi = Math.min(HIGH, Math.round(center) + 12);
+  const lo = Math.max(LOW, Math.round(center) - 12), hi = Math.min(HIGH, Math.round(center) + 12, ceiling);
   let best = null, bestCost = Infinity;
   for (const v of candidates(pcs, lo, hi)) {
     const span = v[v.length - 1] - v[0];
@@ -65,9 +66,13 @@ export function voice(chord, key, style, prev, center) {
     if (V.fourths) for (let i = 1; i < v.length; i++) cost += Math.abs(v[i] - v[i - 1] - 5) * 0.4;
     if (cost < bestCost) { bestCost = cost; best = v; }
   }
-  // A style may not fit a chord in range (a cluster over a sus chord, say); a plain close voicing always does.
-  if (!best && style !== 'rootless') return voice(chord, key, 'rootless', prev, center);
-  if (!best) { let m = lo - 1; best = pcs.map((pc) => { m++; while (mod12(m) !== pc) m++; return m; }).sort((a, b) => a - b); }
+  // A style may not fit a chord in range (a cluster over a sus chord, say); a close chord hanging down from the top
+  // of the range always does, and never crosses the ceiling.
+  if (!best && style !== 'rootless') return voice(chord, key, 'rootless', prev, center, ceiling);
+  if (!best) {
+    best = [...new Set(pcs.map((pc) => { let m = hi; while (mod12(m) !== pc) m--; return m; }))].sort((a, b) => a - b);
+    while (best.length > 2 && best[0] < lo) best.shift();
+  }
   return best;
 }
 

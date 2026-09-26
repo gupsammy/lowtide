@@ -3,23 +3,30 @@ import assert from 'node:assert/strict';
 import { STATIONS } from '../src/stations.js';
 import { plan, opening } from '../src/plan.js';
 import { review, nextTrack } from '../src/critic.js';
-import { chordPcs, mod12 } from '../src/theory.js';
+import { mod12 } from '../src/theory.js';
 
 const st = STATIONS[0];
 const passing = () => {
   for (let s = 1; ; s++) { const p = plan(s, st); if (review(p, st).ok && p.events.lead.length) return p; }
 };
 
-test('the critic hears a melody note grinding against its chord', () => {
+test('the critic hears a melody note grinding against the keys', () => {
   const p = structuredClone(passing());
-  const n = p.events.lead.find((x) => x.beat % 1 === 0);
-  const c = p.chords.findLast((x) => x.start <= n.beat);
-  const tones = chordPcs(c.key + c.root, c.q).map(mod12);
-  // a semitone above a chord note that isn't itself in the chord
-  const bad = tones.map((t) => t + 1).find((pc) => !tones.includes(mod12(pc)));
-  if (bad === undefined || c.q === '7b9') return;
-  n.midi = 60 + mod12(bad);
+  const n = p.events.lead.find((x) => p.events.keys.some((k) => k.beat <= x.beat && x.beat < k.beat + k.len));
+  const k = p.events.keys.find((k) => k.beat <= n.beat && n.beat < k.beat + k.len);
+  // above the chord, a semitone over one of its notes: a minor ninth against the keys
+  let m = Math.max(...k.midis) + 1;
+  while (!k.midis.some((v) => mod12(m - v) === 1)) m++;
+  n.midi = m;
   assert.match(review(p, st).problems.join(), /grinds/);
+});
+
+test('the critic hears a melody that sinks into the chord', () => {
+  const p = structuredClone(passing());
+  const n = p.events.lead.find((x) => p.events.keys.some((k) => k.beat <= x.beat && x.beat < k.beat + k.len));
+  const k = p.events.keys.find((k) => k.beat <= n.beat && n.beat < k.beat + k.len);
+  n.midi = k.midis[k.midis.length - 1] - 12;
+  assert.match(review(p, st).problems.join(), /sinks/);
 });
 
 test('the critic rejects a tempo the station does not allow', () => {

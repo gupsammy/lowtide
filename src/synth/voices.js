@@ -1,6 +1,7 @@
-// Synth voices (from loop-band): a few copies of one wave, a little out of tune with each other, through a resonant low-pass filter.
-// Plus FM bells, where one sine wave bends the pitch of another.
-import { TAU, rng, SVF } from './dsp.js';
+// Synth voices (partly from loop-band): a few copies of one wave, a little out of tune with each other, through a
+// resonant low-pass filter; FM bells and an FM electric piano, where one sine wave bends the pitch of another; a felt
+// piano from a few stiff-string harmonics; and two basses, one round and one a plucked string.
+import { TAU, rng, clamp, SVF } from './dsp.js';
 import { mtof } from '../theory.js';
 
 // A saw wave with its sharp jump smoothed (polyBLEP), so high notes don't make buzzy aliasing noise.
@@ -20,8 +21,7 @@ const WAVES = { saw, square: (p, dt) => saw(p, dt) - saw((p + 0.5) % 1, dt), sin
 const BASE = { wave: 'saw', unison: 2, sine: 0, rise: false };
 export const VOICES = {
   pad: { unison: 3, rise: true, attack: 0.6, decay: 1, sustain: 1, release: 1.2, cutoff: 300, env: 900, envDecay: 1.5, q: 0.7, detune: 14, width: 1, level: 0.28 },
-  bass: { unison: 1, sine: 1.6, attack: 0.006, decay: 0.5, sustain: 0.55, release: 0.08, cutoff: 110, env: 420, envDecay: 0.08, q: 0.8, detune: 0, width: 0, level: 0.42 },
-  soft: { unison: 1, sine: 1.1, attack: 0.03, decay: 0.6, sustain: 0.6, release: 0.2, cutoff: 700, env: 500, envDecay: 0.2, q: 0.7, detune: 0, width: 0, level: 0.38, vibrato: 0.12 },
+  soft: { unison: 1, sine: 1.1, attack: 0.03, decay: 0.6, sustain: 0.6, release: 0.2, cutoff: 700, env: 500, envDecay: 0.2, q: 0.7, detune: 0, width: 0, level: 0.26, vibrato: 0.12 },
   bell: { fm: true, ratio: 4, index: 1.4, ring: 1.1, release: 0.3, level: 0.32 },
 };
 
@@ -77,10 +77,12 @@ function bell(L, R, sr, o, V) {
 }
 
 // Electric piano, by FM as in the Rhodes-like DX7 patches: a sine whose phase is pushed by a second sine at the same
-// pitch (the warm "body", bright at the strike and mellowing), plus a short high tine at 14× the pitch for the bark.
-// A slow tremolo swings the sound between the speakers. patch: { bright 0–1, tremRate Hz, tremDepth 0–1 }.
+// pitch (the warm "body", bright at the strike and mellowing), plus a short high tine at 14× the pitch. Hit hard, it
+// barks: the tone saturates. Each note sits a few cents off true (o.detune), as the tines of a real one do. A slow
+// tremolo swings the sound between the speakers. patch: { bright 0–1, tremRate Hz, tremDepth 0–1 }.
 export function ep(L, R, sr, o, patch) {
-  const f = mtof(o.midi), i0 = Math.round(o.t * sr), n = Math.round((o.len + 0.35) * sr);
+  const f = mtof(o.midi) * Math.pow(2, (o.detune ?? 0) / 1200), i0 = Math.round(o.t * sr), n = Math.round((o.len + 0.35) * sr);
+  const bark = 1 + 1.6 * o.vel * o.vel * patch.bright;
   const decay = 0.9 + 1.8 * Math.exp(-(o.midi - 48) / 18), cut = 1400 + 3000 * patch.bright, a = Math.exp((-TAU * cut) / sr);
   let pc = 0, pm = 0, pt = 0, lp = 0;
   for (let i = 0; i < n && i0 + i < L.length; i++) {
@@ -91,26 +93,95 @@ export function ep(L, R, sr, o, patch) {
     const amp = Math.min(1, t / 0.002) * Math.exp(-t / decay) * (t > o.len ? Math.exp(-(t - o.len) / 0.09) : 1);
     lp = (1 - a) * (Math.sin(TAU * pc + index * Math.sin(TAU * pm)) + tine) + a * lp;
     const trem = Math.sin(TAU * patch.tremRate * (o.t + t)) * patch.tremDepth;
-    const v = lp * amp * o.vel * 0.3;
+    const v = (Math.tanh(lp * bark) / bark) * amp * o.vel * 0.3;
     L[i0 + i] += v * (1 - trem); R[i0 + i] += v * (1 + trem);
   }
 }
 
-// Felt piano: a few harmonics, each a touch sharp (real strings are stiff) and each dying faster the higher it is,
-// with a soft hammer (slow attack) and a low-pass for the felt laid between hammer and string.
+// Felt piano: a few harmonics, each a touch sharp (real strings are stiff) and each dying faster the higher it is.
+// Every note is two strings a cent or two apart, so it shimmers as a piano's unison strings beat against each other.
+// The felt between hammer and string softens the attack and the tone, more so on soft notes; the hammer itself
+// adds a short thud of noise.
 export function felt(L, R, sr, o, patch) {
-  const f = mtof(o.midi), i0 = Math.round(o.t * sr), n = Math.round((o.len + 0.5) * sr);
-  const body = 1.2 + 2.5 * Math.exp(-(o.midi - 48) / 16), cut = 900 + 1800 * patch.bright, a = Math.exp((-TAU * cut) / sr);
-  const H = [1, 2, 3, 4, 5, 6].map((k) => ({ f: f * k * Math.sqrt(1 + 0.0004 * k * k), g: 1 / Math.pow(k, 1.4), d: body / (1 + 0.6 * (k - 1)), p: 0 }));
+  const f = mtof(o.midi), i0 = Math.round(o.t * sr), n = Math.round((o.len + 0.5) * sr), r = rng(o.seed ?? 1);
+  const body = 1.2 + 2.5 * Math.exp(-(o.midi - 48) / 16), cut = 600 + (1200 + 2000 * patch.bright) * o.vel * o.vel, a = Math.exp((-TAU * cut) / sr);
+  const split = Math.pow(2, (0.8 + 1.2 * r()) / 1200);
+  const H = [1, 2, 3, 4, 5, 6].flatMap((k) => [1, split].map((s) => ({ f: f * s * k * Math.sqrt(1 + 0.0004 * k * k), g: 0.5 / Math.pow(k, 1.4), d: body / (1 + 0.6 * (k - 1)), p: r() })));
   const pan = Math.max(-0.5, Math.min(0.5, (o.midi - 62) / 30)), gl = 1 - Math.max(0, pan), gr = 1 + Math.min(0, pan);
-  let lp = 0;
+  const thud = Math.exp((-TAU * 1800) / sr);
+  let lp = 0, hn = 0;
   for (let i = 0; i < n && i0 + i < L.length; i++) {
     const t = i / sr;
     let x = 0;
     for (const h of H) { h.p += h.f / sr; x += Math.sin(TAU * h.p) * h.g * Math.exp(-t / h.d); }
     const amp = Math.min(1, t / 0.008) * (t > o.len ? Math.exp(-(t - o.len) / 0.12) : 1);
+    hn = (1 - thud) * (r() * 2 - 1) + thud * hn;
+    x += hn * 0.5 * o.vel * Math.exp(-t / 0.012);
     lp = (1 - a) * x + a * lp;
-    const v = lp * amp * o.vel * 0.26;
+    const v = lp * amp * o.vel * 0.234;
     L[i0 + i] += v * gl; R[i0 + i] += v * gr;
+  }
+}
+
+// Round bass: a sine with a little triangle for edge, gently driven, so it's felt more than heard.
+export function roundBass(L, R, sr, o) {
+  const f = mtof(o.midi), i0 = Math.round(o.t * sr), n = Math.round((o.len + 0.08) * sr);
+  let ph = 0, level = 0;
+  for (let i = 0; i < n && i0 + i < L.length; i++) {
+    const t = i / sr;
+    ph += f / sr; if (ph >= 1) ph -= 1;
+    if (t < o.len) level = t < 0.006 ? t / 0.006 : 0.7 + 0.3 * Math.exp(-(t - 0.006) / 0.4);
+    else level *= Math.exp(-1 / (0.025 * sr));
+    const tri = 1 - 4 * Math.abs(ph - 0.5);
+    const v = (Math.tanh(1.4 * (Math.sin(TAU * ph) + 0.25 * tri)) / 1.4) * level * o.vel * 0.44;
+    if (i0 + i >= 0) { L[i0 + i] += v; R[i0 + i] += v; }
+  }
+}
+
+// One plucked string (Karplus–Strong, from loop-band): a buffer one period long, read, gently low-pass filtered and
+// written back, so each trip round the loop dulls the sound a little, as a real string loses its high overtones first.
+// What starts in the buffer is the shape of a string pulled aside at the pick point.
+//   o: { t, f, len, vel, pick (0–1 along the string), damp, ring (seconds to fade 60 dB), seed }
+function pluck(out, sr, o) {
+  const r = rng(o.seed), i0 = Math.round(o.t * sr), f = o.f, vel = o.vel ?? 1;
+  const damp = clamp(o.damp ?? 0.12, 0, 0.9), g = Math.pow(10, -3 / (o.ring * f));
+  // the loop is N whole samples plus a fraction (an allpass filter), minus the delay the low-pass filter adds
+  const Pd = sr / f, w = (TAU * f) / sr, pd = Math.atan2(damp * Math.sin(w), 1 - damp * Math.cos(w)) / w;
+  const N = Math.max(2, Math.floor(Pd - pd - 0.2)), frac = Pd - pd - N, apc = (1 - frac) / (1 + frac);
+  const d = new Float32Array(N), apex = clamp(Math.round((o.pick ?? 0.14) * N), 1, N - 1);
+  const soft = 1 - Math.exp((-TAU * (500 + 9000 * vel * vel * 0.3)) / sr);
+  let s = 0, mean = 0;
+  for (let k = 0; k < N; k++) {
+    const tri = k < apex ? k / apex : (N - k) / (N - apex);
+    s += soft * (tri + (r() - 0.5) * 0.3 - s);
+    d[k] = s; mean += s;
+  }
+  mean /= N;
+  for (let k = 0; k < N; k++) d[k] = (d[k] - mean) * vel;
+  const nLen = Math.round(o.len * sr), rel = Math.round(0.03 * sr);
+  let p = 0, lp = 0, apx = 0, apy = 0;
+  for (let i = 0; i < nLen + rel; i++) {
+    const j = i0 + i;
+    if (j >= out.length) break;
+    const y = d[p];
+    lp += (1 - damp) * (y - lp);
+    const ap = apc * lp + apx - apc * apy; apx = lp; apy = ap;
+    d[p] = ap * g;
+    if (++p === N) p = 0;
+    if (j >= 0) out[j] += i >= nLen ? y * (1 - (i - nLen) / rel) : y; // the fingers lift: a quick fade
+  }
+}
+
+// Upright bass: a plucked string, dark and quick to fade, with a sine under it for the weight a body gives.
+export function uprightBass(L, R, sr, o) {
+  const f = mtof(o.midi), n = Math.round((o.len + 0.03) * sr), i0 = Math.round(o.t * sr), x = new Float32Array(n);
+  pluck(x, sr, { t: 0, f, len: o.len, vel: o.vel, pick: 0.22, damp: 0.45, ring: 1.4, seed: o.seed });
+  let ph = 0;
+  for (let i = 0; i < n && i0 + i < L.length; i++) {
+    const t = i / sr;
+    ph += f / sr;
+    const env = Math.min(1, t / 0.01) * Math.exp(-t / 0.9) * (t > o.len ? Math.max(0, 1 - (t - o.len) / 0.03) : 1);
+    const v = (x[i] * 0.9 + Math.sin(TAU * ph) * 0.45 * env) * o.vel * 0.75;
+    if (i0 + i >= 0) { L[i0 + i] += v; R[i0 + i] += v; }
   }
 }

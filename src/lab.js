@@ -1,7 +1,8 @@
 // The listening lab: ten consecutive radio tracks for one station, each opening rendered and playable, so sameness
-// can be heard rather than argued about.
+// can be heard rather than argued about, and rated, so taste can be measured rather than guessed.
 import { STATIONS, stationById } from './stations.js';
 import { nextTrack } from './critic.js';
+import { opening } from './plan.js';
 import { deriveSeed } from './rand.js';
 import { NOTE_NAMES } from './theory.js';
 
@@ -11,6 +12,21 @@ const params = new URLSearchParams(location.search);
 // Renders run at one fixed rate; the browser resamples to the sound card's rate on playback.
 const sr = 44100;
 let ctx, playing = null, rowTimer = null, batchId = 0;
+
+// Ratings stay in this browser, keyed by station and seed, so rating a track again replaces the old rating. Each
+// keeps the track's traits and opening, so the ratings can later be read against what the engine chose.
+const KEY = 'lowtide.ratings', TAGS = ['lovely', 'stiff', 'muddy', 'samey', 'busy', 'boring'];
+const ratings = (() => { try { return JSON.parse(localStorage.getItem(KEY)) ?? {}; } catch { return {}; } })();
+function rate(p, change) {
+  const id = `${p.station}:${p.seed}`, r = { rating: 0, tags: [], ...ratings[id] };
+  change(r);
+  if (!r.rating && !r.tags.length) delete ratings[id];
+  else ratings[id] = { ...r, station: p.station, seed: p.seed, title: p.title, traits: p.traits, opening: opening(p), at: new Date().toISOString() };
+  try { localStorage.setItem(KEY, JSON.stringify(ratings)); } catch {}
+  counted();
+  return ratings[id] ?? { rating: 0, tags: [] };
+}
+const counted = () => ($('export').textContent = `Export ratings (${Object.keys(ratings).length})`);
 
 const stationSel = $('station');
 for (const st of STATIONS) stationSel.append(new Option(`${st.name}`, st.id));
@@ -59,20 +75,34 @@ function build() {
   }
 }
 
+const KEYS = { ep: 'electric piano', felt: 'felt piano', upright: 'upright piano' };
 function cardFor(p, rerolls, problems, i) {
-  const t = p.traits, el = document.createElement('article');
+  const t = p.traits, S = t.space, el = document.createElement('article');
   el.className = 'card';
   const chip = (text, cls = '') => `<span class="chip ${cls}">${text}</span>`;
   el.innerHTML = `
     <div class="top"><span class="title">${i + 1}. ${p.title}</span><span class="seed">seed ${p.seed}</span></div>
     <div class="facts">${chip(`${NOTE_NAMES[t.key]} ${t.mode}`)}${chip(`${p.bpm} bpm`)}${chip(`opens: ${t.intro}`, 'intro')}${chip(`stands out: ${t.standout}`, 'standout')}
-      ${chip(t.keysVoice === 'ep' ? 'electric piano' : 'felt piano')}${chip(`lead: ${t.leadVoice}`)}${chip(`${t.kit} kit`)}${chip(`${t.family} beat`)}${chip(t.voicing)}${chip(t.comp)}</div>
+      ${chip(KEYS[t.keysVoice])}${chip(`lead: ${t.leadVoice}`)}${chip(`${t.bassVoice} bass`)}${chip(`${t.kit} kit`)}${chip(`${t.family} beat, ${t.feel.grid}ths swung ${Math.round(t.feel.swing * 100)}%`)}
+      ${chip(t.voicing)}${chip(t.comp === t.compB ? t.comp : `${t.comp}, B ${t.compB}`)}${chip(`melody: ${t.phrase}`)}${S.echo ? chip('echo') : ''}${S.grit ? chip(`${S.grit.bits}-bit`) : ''}${S.texture ? chip('ocean bed') : ''}</div>
     <div class="prog"><b>A</b> ${t.shape} <b>· B</b> ${t.shapeB}${t.shift !== 'none' ? ` <b>(${t.shift})</b>` : ''}</div>
     <canvas width="600" height="88" aria-label="play opening"></canvas>
-    <div class="row"><span class="status">rendering…</span><button>Play</button></div>`;
+    <div class="row"><span class="status">rendering…</span><button class="play">Play</button></div>
+    <div class="rate"><button class="vote" data-v="1" aria-label="like">👍</button><button class="vote" data-v="-1" aria-label="dislike">👎</button>
+      ${TAGS.map((tag) => `<button class="tag" data-tag="${tag}">${tag}</button>`).join('')}</div>`;
   const canvas = el.querySelector('canvas'), status = el.querySelector('.status');
   const play = () => playTrack(i, SECONDS);
-  canvas.onclick = play; el.querySelector('button').onclick = play;
+  canvas.onclick = play; el.querySelector('.play').onclick = play;
+  const show = (r) => {
+    el.querySelectorAll('.vote').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.v) === r.rating)));
+    el.querySelectorAll('.tag').forEach((b) => b.setAttribute('aria-pressed', String(r.tags.includes(b.dataset.tag))));
+  };
+  el.querySelectorAll('.vote').forEach((b) => (b.onclick = () => show(rate(p, (r) => { const v = Number(b.dataset.v); r.rating = r.rating === v ? 0 : v; }))));
+  el.querySelectorAll('.tag').forEach((b) => (b.onclick = () => show(rate(p, (r) => {
+    const tag = b.dataset.tag;
+    r.tags = r.tags.includes(tag) ? r.tags.filter((x) => x !== tag) : [...r.tags, tag];
+  }))));
+  show(ratings[`${p.station}:${p.seed}`] ?? { rating: 0, tags: [] });
   if (problems.length) { status.textContent = `critic gave up: ${problems[0]}`; status.classList.add('warn'); }
   return {
     el,
@@ -118,6 +148,16 @@ function playRow(i = 0) {
   tracks[i].card.el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
+$('export').onclick = () => {
+  const blob = new Blob([JSON.stringify(Object.values(ratings), null, 1)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `lowtide-ratings-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  // the download reads the URL after this returns; freed at once, Firefox can save nothing
+  setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+};
+counted();
 $('batch').onclick = () => { $('seed').value = String(Math.floor(Math.random() * 1e6)); build(); };
 $('row').onclick = () => { stop(); playRow(0); };
 $('stop').onclick = stop;

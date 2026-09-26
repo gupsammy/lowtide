@@ -1,15 +1,20 @@
-// A plan's section → stereo audio. Each section renders on its own with a ringing tail; the player lays sections end
-// to end and adds the tails into what follows, then runs the joined stream through the tape stage. The tape stage
-// bends and saturates, so it must see one unbroken signal, never pieces. Pure: runs in a Web Worker and in Node.
-import { rng, Biquad, SVF, stereo, mixInto } from './synth/dsp.js';
-import { drums } from './synth/drums.js';
-import { note, ep, felt } from './synth/voices.js';
+// A plan's section → three stereo streams: dry, a reverb send and an echo send. Everything here is linear and tied
+// to absolute time (the chorus, the ducking under the kick, the intro's filter sweep), so sections can render apart,
+// in any order, and simply add: one section's ringing tail adds into the next. The deck (deck.js) then hears the
+// joined stream and does everything nonlinear. Pure: runs in a Web Worker and in Node.
+import { TAU, Biquad, SVF, stereo, hashString } from './synth/dsp.js';
+import { note, ep, felt, roundBass, uprightBass } from './synth/voices.js';
+import { sampledNote, buildKit, playHit } from './sampler.js';
+import { createDeck } from './deck.js';
 
 export const PRE = 0.1; // room before the bar line for hits pushed early
-export const TAIL = 2.5; // room after the section for notes ringing on
+export const TAIL = 3; // room after the section for notes ringing on
 
-const KITS = { dusty: 'acoustic', tight: 'machine' };
-const LEVEL = { keys: 0.85, pad: 0.7, bass: 0.9, lead: 0.55, kick: 0.85, snare: 0.5, hats: 0.28 };
+// Each part's level in the dry mix, and how much of it goes to the room (× the track's wet) and the echo.
+const MIX = { keys: 0.8, pad: 0.5, bass: 0.7, lead: 0.62, kick: 1, snare: 0.9, hats: 0.8 };
+const VERB = { keys: 0.9, pad: 1.4, lead: 1, snare: 0.8, hats: 0.3 };
+const ECHO = { lead: 1, keys: 0.2 };
+const MASTER = 0.98; // into the deck's glue stage; set so openings measure about -16 LUFS
 
 // Where section i sits in the track, in seconds.
 export function sectionSpan(p, i) {
@@ -17,47 +22,97 @@ export function sectionSpan(p, i) {
   return { start: s.start * spb, length: s.bars * 4 * spb };
 }
 
-export function renderSection(p, i, sr) {
-  const sec = p.sections[i], spb = 60 / p.bpm, { start, length } = sectionSpan(p, i);
-  const n = Math.round((PRE + length + TAIL) * sr);
-  const t0 = start - PRE, from = sec.start, to = sec.start + sec.bars * 4;
-  const within = (e) => e.beat >= from && e.beat < to;
-  const at = (beat) => beat * spb - t0; // seconds into this buffer
-  const T = p.traits, patch = T.patch;
-  const bus = { keys: stereo(n), lead: stereo(n), rest: stereo(n) };
+// Building a kit resamples every hit, so each track's kit is kept while it's in use.
+const kits = new Map();
+function kitFor(p, bank, sr) {
+  const k = `${p.station}:${p.seed}:${p.traits.kit}:${sr}`;
+  if (!kits.has(k)) { if (kits.size > 16) kits.clear(); kits.set(k, buildKit(bank, p.seed, p.traits.kit, sr)); }
+  return kits.get(k);
+}
 
-  for (const e of p.events.keys.filter(within)) {
+// opts.only: render just these parts (keys, pad, bass, lead, drums), for tests and soloing.
+export function renderSection(p, i, sr, bank, opts = {}) {
+  const sec = p.sections[i], spb = 60 / p.bpm, { start, length } = sectionSpan(p, i);
+  const n = Math.round((PRE + length + TAIL) * sr), t0 = start - PRE, from = sec.start, to = sec.start + sec.bars * 4;
+  const within = (e) => e.beat >= from && e.beat < to, at = (e) => e.beat * spb + (e.ms ?? 0) / 1000 - t0;
+  const T = p.traits, patch = T.patch, play = (part) => !opts.only || opts.only.includes(part);
+  const lanes = {}, lane = (k) => (lanes[k] ??= stereo(n));
+
+  // Keys. The top note of a voicing is what the ear follows, so it's played a little stronger and the inner notes
+  // a little softer. Each pitch of the electric piano has its own few cents of detune, like a real one's tines.
+  if (play('keys')) for (const e of p.events.keys.filter(within)) {
+    const b = lane('keys');
     e.midis.forEach((midi, k) => {
-      const o = { t: at(e.beat) + (k * e.spreadMs) / 1000, len: e.len * spb, midi, vel: e.vel };
-      (T.keysVoice === 'ep' ? ep : felt)(bus.keys.L, bus.keys.R, sr, o, patch);
+      const w = k === e.midis.length - 1 ? 1.25 : k === 0 ? 0.9 : 0.8;
+      const o = { t: at(e) + (k * e.spreadMs) / 1000, len: e.len * spb, midi, vel: Math.min(1, e.vel * w), seed: hashString(`${p.seed}:${e.beat}:${k}`) };
+      if (T.keysVoice === 'upright') sampledNote(b.L, b.R, sr, bank, 'upright', { ...o, pan: (midi - 62) / 40 });
+      else if (T.keysVoice === 'ep') ep(b.L, b.R, sr, { ...o, detune: (hashString(`${p.seed}:${midi}`) % 600) / 100 - 3 }, patch);
+      else felt(b.L, b.R, sr, o, patch);
     });
   }
-  for (const e of p.events.pad.filter(within)) e.midis.forEach((midi, k) =>
-    note(bus.keys.L, bus.keys.R, sr, { t: at(e.beat), len: e.len * spb, midi, vel: e.vel * LEVEL.pad, voice: 'pad', seed: p.seed + k }));
-  for (const e of p.events.bass.filter(within))
-    note(bus.rest.L, bus.rest.R, sr, { t: at(e.beat), len: e.len * spb, midi: e.midi, vel: e.vel * LEVEL.bass, voice: 'bass', seed: p.seed });
-  for (const e of p.events.lead.filter(within))
-    note(bus.lead.L, bus.lead.R, sr, { t: at(e.beat), len: e.len * spb, midi: e.midi, vel: e.vel, voice: T.leadVoice, seed: p.seed });
-
-  const hits = p.events.drums.filter(within).map((e) => [Math.max(0, at(e.beat) + e.ms / 1000), e.drum, e.vel]);
-  if (hits.length) {
-    const st = drums(n, sr, hits, p.seed + i, KITS[T.kit]);
-    const dusty = T.kit === 'dusty' ? new Biquad('lp', 5200, 0.7, 0, sr) : null;
-    if (dusty) for (const k of ['kick', 'snare', 'hats']) for (let j = 0; j < n; j++) st[k][j] = k === 'kick' ? st[k][j] : dusty.tick(st[k][j]);
-    mixInto(bus.rest, st.kick, LEVEL.kick, 0);
-    mixInto(bus.rest, st.snare, LEVEL.snare, 0.05);
-    mixInto(bus.rest, st.hats, LEVEL.hats, 0.25);
+  if (play('pad')) for (const e of p.events.pad.filter(within)) e.midis.forEach((midi, k) =>
+    note(lane('pad').L, lane('pad').R, sr, { t: at(e), len: e.len * spb, midi, vel: e.vel, voice: 'pad', seed: p.seed + k }));
+  if (play('bass')) for (const e of p.events.bass.filter(within)) {
+    const o = { t: at(e), len: e.len * spb, midi: e.midi, vel: e.vel, seed: hashString(`${p.seed}:bass:${e.beat}`) };
+    (T.bassVoice === 'upright' ? uprightBass : roundBass)(lane('bass').L, lane('bass').R, sr, o);
+  }
+  if (play('lead')) for (const e of p.events.lead.filter(within)) {
+    const o = { t: at(e), len: e.len * spb, midi: e.midi, vel: e.vel, seed: p.seed };
+    if (T.leadVoice === 'vibes' || T.leadVoice === 'kalimba') sampledNote(lane('lead').L, lane('lead').R, sr, bank, T.leadVoice, { ...o, pan: 0.15 });
+    else note(lane('lead').L, lane('lead').R, sr, { ...o, voice: T.leadVoice });
+  }
+  if (play('drums')) {
+    const kit = kitFor(p, bank, sr), stems = { kick: lane('kick'), snare: lane('snare'), hats: lane('hats') };
+    for (const e of p.events.drums.filter(within)) playHit(stems, sr, kit, at(e), e.drum, e.vel);
   }
 
-  // The intro sweep: the keys start behind a closed low-pass that opens across the section.
-  if (sec.fx.sweep) sweep(bus.keys, sr, PRE, length);
-  const out = stereo(n);
-  for (const b of [bus.keys, bus.lead, bus.rest]) for (let j = 0; j < n; j++) { out.L[j] += b.L[j] * (b === bus.keys ? LEVEL.keys : b === bus.lead ? LEVEL.lead : 1); out.R[j] += b.R[j] * (b === bus.keys ? LEVEL.keys : b === bus.lead ? LEVEL.lead : 1); }
-  if (sec.fx.phone) phone(out, sr);
-  if (sec.fx.fade) fade(out, sr, PRE + length * 0.25, PRE + length + 0.5);
+  if (lanes.keys && T.keysVoice === 'ep') chorus(lanes.keys, sr, t0);
+  if (lanes.keys && sec.fx.sweep) sweep(lanes.keys, sr, PRE, length);
+  // everything tonal dips under each kick of the whole track, so a tail from the last section ducks too
+  if (T.space.pump) duck(['keys', 'pad', 'bass', 'lead'].map((k) => lanes[k]).filter(Boolean), sr, t0,
+    p.events.drums.filter((e) => e.drum === 'kick').map((e) => e.beat * spb + e.ms / 1000), T.space.pump);
+
+  const out = { dry: stereo(n), verb: stereo(n), echo: stereo(n) }, wet = T.space.wet, E = T.space.echo;
+  for (const [k, b] of Object.entries(lanes)) {
+    const gains = [[out.dry, MIX[k]], [out.verb, (VERB[k] ?? 0) * wet], [out.echo, E ? (ECHO[k] ?? 0) * E.send : 0]].filter(([, g]) => g);
+    for (const [dst, g] of gains) for (let j = 0; j < n; j++) { dst.L[j] += b.L[j] * g; dst.R[j] += b.R[j] * g; }
+  }
+  for (const s of Object.values(out)) {
+    if (sec.fx.phone) phone(s, sr);
+    if (sec.fx.fade) fade(s, sr, PRE + length * 0.25, PRE + length + 0.5);
+  }
   return { ...out, start: t0 };
 }
 
+// Chorus: the signal plus a copy whose delay drifts slowly, the two sides drifting in opposite directions. The drift
+// follows absolute time, so sections chorused apart and summed sound as if chorused together.
+function chorus(b, sr, t0) {
+  for (const [ch, phase] of [[b.L, 0], [b.R, Math.PI / 2]]) {
+    const src = Float32Array.from(ch);
+    for (let j = 0; j < ch.length; j++) {
+      const d = (0.012 + 0.0025 * Math.sin(TAU * 0.7 * (t0 + j / sr) + phase)) * sr, k = Math.floor(d), f = d - k;
+      const a = j - k >= 0 ? src[j - k] : 0, c = j - k - 1 >= 0 ? src[j - k - 1] : 0;
+      ch[j] = src[j] * 0.8 + (a * (1 - f) + c * f) * 0.45;
+    }
+  }
+}
+
+// Ducking: a gain that dips after each kick and recovers over about a tenth of a second.
+function duck(bufs, sr, t0, kicks, depth) {
+  if (!bufs.length || !kicks.length) return;
+  const times = kicks.sort((a, b) => a - b), n = bufs[0].L.length;
+  let k = 0;
+  for (let j = 0; j < n; j++) {
+    const t = t0 + j / sr;
+    while (k + 1 < times.length && times[k + 1] <= t) k++;
+    const tau = t - times[k];
+    const env = tau < 0 ? 0 : tau < 0.005 ? tau / 0.005 : Math.exp(-(tau - 0.005) / 0.1);
+    const g = 1 - depth * env;
+    for (const b of bufs) { b.L[j] *= g; b.R[j] *= g; }
+  }
+}
+
+// The intro sweep: the keys start behind a closed low-pass that opens across the section.
 function sweep(b, sr, from, length) {
   const fl = new SVF(), fr = new SVF();
   for (let j = 0; j < b.L.length; j++) {
@@ -85,36 +140,37 @@ function fade(b, sr, from, to) {
   }
 }
 
-// The worn-tape stage: the top end rolled off, soft saturation, a little hiss and the odd crackle, all scaled by the
-// track's tape amount (0–1). Wow and flutter need to run unbroken across sections, so they come with the player.
-export function tape(b, sr, amt, seed) {
-  const r = rng(seed), drive = 1 + 1.6 * amt, norm = 1 / Math.tanh(drive * 0.5) * 0.5;
-  let crackle = 0;
-  for (const ch of [b.L, b.R]) {
-    const lp = new Biquad('lp', 9500 - 5000 * amt, 0.6, 0, sr);
-    let hp = 0, prev = 0;
-    for (let j = 0; j < ch.length; j++) {
-      const noise = r() * 2 - 1;
-      hp = 0.97 * (hp + noise - prev); prev = noise; // hiss: white noise without its lows
-      if (r() < 0.00006 * (0.4 + amt)) crackle = (0.05 + 0.12 * r()) * (r() < 0.5 ? -1 : 1);
-      crackle *= 0.86;
-      ch[j] = Math.tanh(drive * lp.tick(ch[j])) * norm + hp * 0.0025 * amt + crackle;
-    }
+// The ocean-drum texture at the render rate, kept per rate.
+const beds = new Map();
+function oceanAt(bank, sr) {
+  const s = bank.byInst.ocean?.[0];
+  if (!s) return null;
+  if (!beds.has(sr)) {
+    const step = s.sr / sr, out = new Float32Array(Math.floor((s.data.length - 1) / step));
+    for (let i = 0; i < out.length; i++) { const p = i * step, k = Math.floor(p), f = p - k; out[i] = s.data[k] * (1 - f) + s.data[k + 1] * f; }
+    beds.set(sr, out);
   }
+  return beds.get(sr);
 }
 
-// The first `seconds` of a track, sections laid end to end with their tails overlapping.
-export function renderOpening(p, seconds, sr) {
-  const n = Math.round(seconds * sr), out = stereo(n);
+// The deck for a track: its room, echo, tape, record and texture, from the plan's space traits.
+export function deckFor(p, sr, bank, opts = {}) {
+  const firstA = p.sections.find((s) => s.kind === 'A');
+  return createDeck({
+    bpm: p.bpm, tape: p.traits.tape, seed: p.seed, space: p.traits.space, ocean: oceanAt(bank, sr), gain: MASTER,
+    vinylBoostUntil: p.traits.intro === 'bed' && firstA ? (firstA.start * 60) / p.bpm : 0, ...opts,
+  }, sr);
+}
+
+// The first `seconds` of a track: sections laid end to end with their tails overlapping, through the deck.
+export function renderOpening(p, seconds, sr, bank, opts = {}) {
+  const n = Math.round(seconds * sr), dry = stereo(n), verb = stereo(n), echo = stereo(n);
   for (let i = 0; i < p.sections.length; i++) {
-    const { start } = sectionSpan(p, i);
-    if (start - PRE >= seconds) break;
-    const s = renderSection(p, i, sr), o = Math.round(s.start * sr);
-    for (let j = 0; j < s.L.length; j++) {
-      const k = o + j;
-      if (k >= 0 && k < n) { out.L[k] += s.L[j]; out.R[k] += s.R[j]; }
+    if (sectionSpan(p, i).start - PRE >= seconds) break;
+    const s = renderSection(p, i, sr, bank, opts), o = Math.round(s.start * sr);
+    for (const [dst, src] of [[dry, s.dry], [verb, s.verb], [echo, s.echo]]) {
+      for (let j = Math.max(0, -o); j < src.L.length && o + j < n; j++) { dst.L[o + j] += src.L[j]; dst.R[o + j] += src.R[j]; }
     }
   }
-  tape(out, sr, p.traits.tape, p.seed);
-  return out;
+  return deckFor(p, sr, bank, opts.deck).process(dry, verb, echo);
 }

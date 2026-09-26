@@ -2,6 +2,7 @@
 // away) or dominant (D, pulling home). A loop walks between jobs with set odds, fills each job with a chord that can
 // do it, then swaps in colour: a borrowed minor iv, a tritone sub for V, a secondary dominant aimed at the next chord.
 // Roots are semitones above the section's key.
+import { MODES, QUALITIES, mod12 } from './theory.js';
 
 // kind decides which qualities the chord may take: maj, min, dom (dominant 7th family), hdim (half-diminished).
 const MAJOR = {
@@ -30,37 +31,55 @@ const VAMPS = {
   lydian: [['I', 0, 'maj'], ['II', 2, 'dom']],
 };
 
-// Qualities by kind and colour. plain = 7ths, lush = 9ths and 13ths, airy = 11ths, 6/9s and sus.
-const COLOUR = {
-  maj: { plain: 'maj7', lush: 'maj9', airy: '6/9' },
-  min: { plain: 'm7', lush: 'm9', airy: 'm11' },
-  dom: { plain: '9', lush: '13', airy: '9sus' },
-  hdim: { plain: 'm7b5', lush: 'm7b5', airy: 'm7b5' },
+// Every chord has a governing scale, written as intervals above its root, and may only take colour notes (9ths,
+// 11ths, 13ths) that the scale holds. So a colour is in key by construction, never by a list of exceptions.
+const PHRYG_DOM = [0, 1, 4, 5, 7, 8, 10]; // the harmonic-minor dominant; also a secondary dominant aimed at a minor chord
+const LYDIAN_DOM = [0, 2, 4, 6, 7, 9, 10]; // tritone subs and the backdoor ♭VII7
+const MIXO = [0, 2, 4, 5, 7, 9, 10]; // a secondary dominant aimed at a major chord
+
+export function scaleOf(ch, mode, target) {
+  if (ch.sub === 'tritone' || ch.roman === 'bVII7') return LYDIAN_DOM;
+  if (ch.sub === 'secondary') return target && (target.kind === 'min' || target.kind === 'hdim') ? PHRYG_DOM : MIXO;
+  if (ch.roman === 'V' && ch.kind === 'dom' && minorish(mode)) return PHRYG_DOM;
+  const parent = ch.borrowed ? MODES.aeolian : MODES[mode]; // borrowed chords come from the parallel minor
+  return parent.map((x) => mod12(x - ch.root)).sort((a, b) => a - b);
+}
+
+// Qualities to try, in order, by kind and colour: plain = 7ths, lush = 9ths and 13ths, airy = 11ths, 6/9s, #11s and
+// sus. A chord takes the first that fits its scale; the fallbacks fit any chord of the kind.
+const PALETTE = {
+  maj: { plain: ['maj7'], lush: ['maj9', 'maj7'], airy: ['maj7#11', '6/9', 'maj9', 'maj7'] },
+  min: { plain: ['m7'], lush: ['m9', 'm7'], airy: ['m11', 'm6', 'm9', 'm7'] },
+  dom: { plain: ['9', '7b9', '7'], lush: ['13', '9', '7b9', '7'], airy: ['9sus', '13', '9', '7b9', '7'] },
+  hdim: { plain: ['m7b5'], lush: ['m7b5'], airy: ['m7b5'] },
 };
+const FALLBACK = { maj: ['6/9', 'maj'], min: ['m7', 'min'], dom: ['7'], hdim: ['m7b5'] };
+const COLOURS = ['plain', 'lush', 'airy'];
+export const fits = (q, scale) => QUALITIES[q].every((x) => scale.includes(mod12(x)));
+
+// One chord's quality. Most chords take the track's colour; some take the colour beside it, so the chords of one
+// track differ while still sounding like a family.
+export function colourChord(R, ch, colour, scale) {
+  const i = COLOURS.indexOf(colour);
+  const mine = R.chance(0.65) ? colour : COLOURS[i === 1 ? R.pick([0, 2]) : 1];
+  const tries = [...(ch.sub === 'tritone' ? ['7#11'] : []), ...PALETTE[ch.kind][mine], ...FALLBACK[ch.kind]];
+  return tries.find((q) => fits(q, scale)) ?? FALLBACK[ch.kind].at(-1);
+}
 
 // Loop shapes as bars × chords per bar. Chords per bar below 1 means one chord holds for two bars.
 export const SHAPES = { '2x1': [2, 1], '2x2': [2, 2], '4x0.5': [4, 0.5], '4x1': [4, 1], '8x0.5': [8, 0.5], '8x1': [8, 1] };
 
 const minorish = (mode) => mode === 'dorian' || mode === 'aeolian';
 
-// A quality for one chord, keeping its upper notes inside the key where that matters.
-function quality(ch, colour, mode, target) {
-  if (ch.q) return ch.q;
-  if (ch.sub === 'tritone') return '7#11';
-  if (ch.sub === 'secondary') return target && target.kind === 'min' ? '7b9' : colour === 'plain' ? '9' : '13';
-  if (ch.roman === 'V' && minorish(mode)) return '7b9'; // the harmonic-minor dominant: its 9th is the key's flat 6th
-  if (ch.roman === 'iii' || ch.roman === 'v') return 'm7'; // their 9ths fall outside the key
-  if (ch.roman === 'I' && mode === 'lydian') return 'maj7#11';
-  if (ch.roman === 'I' && mode === 'mixolydian' && ch.kind === 'dom') return '9';
-  return COLOUR[ch.kind][colour];
-}
-
 // grammar: { borrowedIv, tritoneSub, backdoor, secondary, turnaround, vamp } odds; shapes: weights over SHAPES.
 // Options: startFn weights, avoid (a list of shapes' roman strings not to repeat).
 export function progression(R, { mode, colour, grammar, shapes, startFn = { T: 5.5, PD: 3.5, D: 1 }, avoid = [] }) {
   for (let attempt = 0; attempt < 24; attempt++) {
     const p = attempt < 20 && R.chance(grammar.vamp ?? 0) ? vamp(R, mode, shapes) : walk(R, mode, grammar, shapes, startFn);
-    for (let i = 0; i < p.chords.length; i++) p.chords[i].q = quality(p.chords[i], colour, mode, p.chords[(i + 1) % p.chords.length]);
+    p.chords.forEach((c, i) => {
+      c.scale = scaleOf(c, mode, p.chords[(i + 1) % p.chords.length]);
+      c.q = colourChord(R, c, colour, c.scale);
+    });
     p.shape = p.chords.map((c) => c.roman).join('–');
     if (!avoid.includes(p.shape)) return p;
   }
@@ -92,6 +111,8 @@ function walk(R, mode, g, shapes, startFn) {
   const n = bars * perBar, beats = 4 / perBar;
   const entry = (roman) => {
     if (roman === 'IV' && mode === 'dorian') return { roman, root: 5, fn: 'PD', kind: 'dom' };
+    if (roman === 'bVII' && mode === 'dorian') return { roman, root: 10, fn: 'D', kind: 'maj' }; // dorian's 6th is major, so ♭VII has a major 7th
+    if (roman === 'I' && mode === 'mixolydian') return { roman, root: 0, fn: 'T', kind: 'dom' }; // mixolydian's own ♭7
     if (roman === 'ii' && mode === 'dorian') return { roman, root: 2, fn: 'PD', kind: 'min' };
     if ((roman === 'iv' || roman === 'bVI') && mode === 'dorian') return { roman, ...vocab[roman], borrowed: true }; // from aeolian
     if (roman === 'V' && mode === 'mixolydian') return { roman: 'v', root: 7, fn: 'D', kind: 'min' };
@@ -134,10 +155,10 @@ function walk(R, mode, g, shapes, startFn) {
     }
   }
   // A turnaround: the last bar's dominant splits into ii–V (or ii–bII7), two chords in one bar.
-  const last = chords[n - 1];
-  if (beats === 4 && last.fn === 'D' && (last.roman === 'V' || last.roman === 'bII7') && chords[n - 2]?.roman !== 'ii' && R.chance(g.turnaround ?? 0)) {
+  // Its ii goes through the same mode mapping as every other chord: minor in dorian, II7 in lydian.
+  const last = chords[n - 1], ii = entry('ii');
+  if (beats === 4 && last.fn === 'D' && (last.roman === 'V' || last.roman === 'bII7') && chords[n - 2]?.roman !== ii.roman && R.chance(g.turnaround ?? 0)) {
     last.beats = 2;
-    const ii = family === 'minor' ? { roman: 'ii', root: 2, fn: 'PD', kind: 'hdim' } : { roman: 'ii', root: 2, fn: 'PD', kind: 'min' };
     chords.splice(n - 1, 0, { ...ii, beats: 2 });
   }
   return { chords, bars, perBar, vamp: false };

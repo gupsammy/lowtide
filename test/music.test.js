@@ -76,9 +76,10 @@ test('voicings sit in range, climb upward, and never hold a minor ninth', () => 
   }
 });
 
-test('melody notes on the beat are notes of the chord under them', () => {
+// Beats 2 and 4 may pass through the scale; beats 1 and 3 carry the harmony.
+test('melody notes on beats 1 and 3 are notes of the chord under them', () => {
   for (const p of plans) for (const n of p.events.lead) {
-    if (n.beat % 1 !== 0) continue;
+    if (n.beat % 2 !== 0) continue;
     const c = p.chords.findLast((x) => x.start <= n.beat);
     assert.ok(chordPcs(c.key + c.root, c.q).map(mod12).includes(mod12(n.midi)), `${p.station} ${p.seed} beat ${n.beat}`);
   }
