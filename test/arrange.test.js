@@ -53,8 +53,9 @@ test('moves change who plays, never what: every note left out falls where a move
       const kept = new Set(p.events[part].map(key));
       assert.ok(p.events[part].every((e) => q.events[part].some((f) => key(f) === key(e))), `${st.id} ${s}: ${part} changed`);
       for (const e of q.events[part]) if (!kept.has(key(e))) {
-        const sec = sectionAt(p, e.beat);
-        assert.ok(!playing(sec, part, e.beat - sec.start), `${st.id} ${s}: ${part} at ${e.beat} left out where it plays`);
+        // a pushed bass note belongs to the chord it lands with (HOOK.md §2)
+        const at = e.lands ?? e.beat, sec = sectionAt(p, at);
+        assert.ok(!playing(sec, part, at - sec.start), `${st.id} ${s}: ${part} at ${e.beat} left out where it plays`);
         cut++;
       }
     }

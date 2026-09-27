@@ -12,10 +12,10 @@ import { sections as buildSections, VERSIONS, arrange, leaveOut, playing } from 
 import { riffCell, fitRiff } from './riff.js';
 
 // Which engine wrote the plan. A new engine writes different music from the same seed, so ratings and rendered tracks
-// carry this tag (MELODY.md §1). A plan with its riff switched off is round 2's, note for note; a plan with no guitar
-// and no mood trait in it (MOODS.md §3) is the riff round's (GUITAR.md §2). A station whose settings were retuned
-// carries a tuning too, since the same engine then plays other music from the same seed (MOODS.md §6).
-export const ENGINE = 'riff-3', RIFF_2 = 'riff-2', ROUND_2 = 'melody-2';
+// carry this tag (MELODY.md §1); the hook, the pushed bass and the lighter swing made every earlier tag's tracks change
+// (HOOK.md §4). A station whose settings were retuned carries a tuning too, since the same engine then plays other
+// music from the same seed (MOODS.md §6).
+export const ENGINE = 'hook-1';
 
 // Sounds whose notes die away fast enough to play a riff on the lead (ARRANGE.md §1), the piano lead among them
 // (MOODS.md §3).
@@ -173,19 +173,24 @@ export function plan(seed, station, opts = {}) {
     return sec.energy >= m.energy + 0.1 ? busier(m.p) : m.p;
   };
 
-  // Melodies are written once per section type and reused whole. The pickup intro previews A's opening bars.
+  // Each section type has a hook: a melody over whole loops, at least four bars, replayed note for note across the
+  // section (HOOK.md §1). The pickup intro previews A's opening bars.
   const melodies = {};
   const melodyFor = (kind, bars) => {
     const k = kind === 'intro' ? 'A' : kind;
     if (!melodies[k]) {
       const prog = k === 'B' ? progB : progA, loop = loopOf(prog, k === 'B' ? bKey : key);
-      melodies[k] = writeMelody(Me, {
-        idea: k === 'B' ? ideaB : ideaA, form: k === 'break' ? 'call' : phrase, bars: secs.find((x) => x.kind === k)?.bars ?? 8,
+      const hook = Math.min(secs.find((x) => x.kind === k)?.bars ?? 8, Math.max(4, prog.bars));
+      melodies[k] = { hook, notes: writeMelody(Me, {
+        idea: k === 'B' ? ideaB : ideaA, form: k === 'break' ? 'call' : phrase, bars: hook,
         key: k === 'B' ? bKey : key, mode: k === 'B' ? bMode : mode, band,
-        chordAt: (t) => loop.at(t).chord, voicingAt: (t) => loop.at(t).v,
-      });
+        chordAt: (t) => loop.at(t).chord, voicingAt: (t) => loop.at(t).v, hook: true,
+      }) };
     }
-    return melodies[k].filter((n) => n.beat < bars * 4);
+    const { hook, notes } = melodies[k], out = [];
+    // the pickup back into the hook plays only where the hook comes round again
+    for (let t = 0; t < bars * 4; t += hook * 4) for (const { turn, ...n } of notes) if (t + n.beat < bars * 4 && !(turn && t + hook * 4 >= bars * 4)) out.push({ ...n, beat: t + n.beat });
+    return out;
   };
 
   // The riff: one cell for the track, fitted once to each loop it plays over, as A and as A′. Keys that push play
@@ -275,7 +280,10 @@ export function plan(seed, station, opts = {}) {
       if (has('bass')) {
         const root = bassNote(c, c.key, prevBass), nextC = here[ci + 1] ?? here[0];
         const kicksIn = kickBeats.map((k) => k - (c.start - beat)).filter((k) => k >= 0 && k < c.beats);
-        for (const [off, l, ve, which] of BASSLINES[bassline](c.beats, kicksIn)) {
+        for (const [o, len, ve, which] of BASSLINES[bassline](c.beats, kicksIn)) {
+          // a pushed note belongs to its chord: it plays where the bass plays at the chord, so it leads a bass that a
+          // move brings back; a section's first chord lands on its beat (HOOK.md §2)
+          const onBeat = o < 0 && ci === 0, off = onBeat ? 0 : o, l = onBeat ? len + o : len;
           let m = root;
           if (which === 'fifth') m = root + 7 > 52 ? root - 5 : root + 7;
           if (which === 'octave') m = root + 12 > 55 ? root : root + 12;
@@ -285,10 +293,12 @@ export function plan(seed, station, opts = {}) {
             // a pushed guitar chord lands with the approach, its root maybe under it, so the bass comes up from below
             if (strummed && m >= (vs[ci + 1] ?? vs[0])[0]) m = nr - 1;
           }
-          while (m >= v[0]) m -= 12; // the bass always stays under the hands
+          // the bass always stays under the hands; a pushed note sounds under the chord before as well
+          const under = off < 0 ? Math.min(v[0], vs[ci - 1][0]) : v[0];
+          while (m >= under) m -= 12;
           const at = c.start + off;
           const ms = lean('bass', feel.bassMs, 0.4);
-          if (playing(sec, 'bass', at - beat)) events.bass.push({ beat: sw(at), len: sw(at + l) - sw(at), midi: m, vel: ve, ms });
+          if (playing(sec, 'bass', Math.max(at, c.start) - beat)) events.bass.push({ beat: sw(at), len: sw(at + l) - sw(at), midi: m, vel: ve, ms, ...(off < 0 ? { lands: c.start } : {}) });
         }
         prevBass = root;
       }
@@ -343,7 +353,7 @@ export function plan(seed, station, opts = {}) {
     guitar: strummed ? { part: riff === 'guitar' ? 'both' : 'chords', sound: keysVoice, pattern: gtr.pattern } : riff === 'guitar' ? { part: 'riff', sound: gtr.sound } : null,
   };
   const title = `${T.pick(TITLE_A)} ${T.pick(TITLE_B)}`;
-  return { seed, station: station.id, tuning: station.tuning, engine: !riff ? ROUND_2 : traits.guitar || M.steady || M.lazy || bassline === 'groove' || leadVoice === 'piano' ? ENGINE : RIFF_2, title, bpm, traits, sections: secs, chords, events, cues, lengthBeats: beat };
+  return { seed, station: station.id, tuning: station.tuning, engine: ENGINE, title, bpm, traits, sections: secs, chords, events, cues, lengthBeats: beat };
 }
 
 // What the first few seconds of a track are made of: the things that decide whether two openings sound alike.

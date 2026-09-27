@@ -67,7 +67,7 @@ Producers add or drop a part every 4 or 8 bars, and pull a part so its return la
 - **The lead leaves only for whole sections**, so no melody is cut mid-phrase.
 - **Moves change who plays, never what they play.** The chords, the riff and every note, hit and fill of the parts still playing are what they would be without the moves. A fill into a breakdown plays, as it does into a same-loop B.
 - **Moves draw from their own stream**, `moves`, so drawing them moves nothing else.
-- **With the riff off there are no moves**, so a seed still writes round 2's track note for note.
+- **With the riff off there are no moves**, so a seed wrote round 2's track note for note, until the hook changed the melody (HOOK.md §4).
 - **A note a move leaves out still draws its timing wobble**, so the notes after it land where they would have.
 
 ### What the draw gives

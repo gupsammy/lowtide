@@ -134,11 +134,21 @@ export function strokes(comp, pattern, at, beats) {
   return out.map(([off, up], i) => [off, (out[i + 1]?.[0] ?? to) - off, up ? 0.55 : i === 0 ? 0.8 : 0.72, up]);
 }
 
-// Bass: [beat offset in the chord, length, velocity, which note: 'root' | 'fifth' | 'octave' | 'approach'].
+// Bass: [beat offset in the chord, length, velocity, which note: 'root' | 'fifth' | 'octave' | 'approach']. A negative offset
+// sounds before the chord, over the one before it.
 // 'kick' plays with the kick drum: kicks lists the kick positions inside the chord, in beats from its start. Each
 // note holds until the next kick; if the chord arrives between kicks, the bass still marks the change.
 export const BASSLINES = {
-  root: (beats) => [[0, beats * 0.9, 0.9, 'root']],
+  // the root half a beat early, held across the change, and the fifth on the and of 3 in each four-beat bar; each note
+  // holds to a tenth of a beat before the next (HOOK.md §2)
+  push: (beats) => {
+    const at = [];
+    for (let b = 0; b < beats; b += 4) {
+      at.push([b - 0.5, 'root']);
+      if (b + 2.5 < Math.min(beats, b + 4) - 0.5) at.push([b + 2.5, 'fifth']);
+    }
+    return at.map(([o, which], i) => [o, (at[i + 1]?.[0] ?? beats - 0.5) - o - 0.1, i === 0 ? 0.9 : which === 'root' ? 0.8 : 0.7, which]);
+  },
   kick: (beats, kicks) => {
     const at = kicks.filter((k) => k >= 0 && k < beats);
     if (!at.includes(0)) at.unshift(0);

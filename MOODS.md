@@ -84,8 +84,8 @@ Any guitar riff over guitar chords now goes to the other guitar, so a nylon stru
 
 ## 4. What stays the same
 
-- **The engine.** A plan that uses a trait is tagged `riff-3`, like one with a guitar; the rest keep `riff-2` or `melody-2`. The retune changes settings, not the engine, so the tags keep their meaning.
-- **The engine checks.** Round 2's check and the riff-2 check run on the four old stations as they stood before the retune, frozen in `test/fixtures/stations-riff2.js`. A track that draws no guitar there is still note for note what riff-2 wrote.
+- **The engine.** A plan that used a trait was tagged `riff-3`, like one with a guitar; the rest kept `riff-2` or `melody-2`. The retune changed settings, not the engine, so the tags kept their meaning. The hook later replaced all three with `hook-1` (HOOK.md §4).
+- **The engine checks.** Round 2's check and the riff-2 check ran on the four old stations as they stood before the retune, frozen in a test fixture, until the hook retired both.
 
 ## 5. Checks
 
@@ -139,7 +139,7 @@ The second pass measured ten tracks from the user's own mix for each station (`r
   - `src/plan.js`: `lazy`, the piano lead, the `both` guitar part, the plan's `tuning`, and the bass under a pushed guitar.
   - `src/render.js`: the piano lead.
   - `src/lab.js`, `lab/listen.html`: the chips for the new traits, the station's line, and the tuning in the rating key.
-  - `test/riff.test.js`, `test/guitar.test.js`: the round 2 and riff-2 checks run on the frozen stations.
+  - `test/riff.test.js`, `test/guitar.test.js`: the round 2 and riff-2 checks ran on the frozen stations (since retired, HOOK.md §4).
   - `test/arrange.test.js`: a guitar riff over guitar chords is on the other guitar.
   - `research/moods.md`: the ten-track pass.
-- **New:** this file, `test/moods.test.js`, `test/fixtures/stations-riff2.js`.
+- **New:** this file, `test/moods.test.js`.

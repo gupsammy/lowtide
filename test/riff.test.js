@@ -2,9 +2,7 @@
 // are in test/measures.test.js with the others; the fit rules, the double and the moves in test/arrange.test.js.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { STATIONS } from '../src/stations.js';
-import { STATIONS as BEFORE } from './fixtures/stations-riff2.js';
 import { plan } from '../src/plan.js';
 import { riffCell, fitRiff } from '../src/riff.js';
 import { stream } from '../src/rand.js';
@@ -13,20 +11,6 @@ import { mod12 } from '../src/theory.js';
 const SEEDS = Array.from({ length: 30 }, (_, i) => 31 + i * 43);
 const ROLES = ['keys', 'lead', 'signature'];
 const sounding = (list, t) => list.filter((e) => e.beat <= t + 1e-9 && t < e.beat + e.len - 1e-9);
-
-// Taken from round 2's engine before the riff was added: with the riff off, a seed must write that track exactly.
-test('with the riff off, every seed writes round 2 note for note', () => {
-  const h = createHash('sha256');
-  // the four stations round 2 had, with the settings they had then (MOODS.md §4)
-  for (const st of BEFORE.slice(0, 4)) for (const s of [1, 4242, 90210, 123456]) {
-    const p = plan(s, st, { riff: null });
-    assert.equal(p.events.riff.length + p.events.double.length, 0);
-    delete p.events.riff; delete p.events.double;
-    for (const k of ['riff', 'riffVoice', 'riffNotes', 'sameB', 'version', 'leadBand', 'loopB', 'moves', 'double', 'fits', 'guitar']) delete p.traits[k];
-    h.update(JSON.stringify(p));
-  }
-  assert.equal(h.digest('hex'), 'ea642468b4ac997bbb817a4587f64777f822bbb93cddf56266a0c6f6d1c98ea6');
-});
 
 test('the role changes who plays the riff, not its notes, the chords or the drums', () => {
   for (const st of STATIONS) for (const s of SEEDS.slice(0, 10)) {

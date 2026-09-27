@@ -37,7 +37,7 @@ It also draws which guitar, its strum pattern and how fast it strums.
 
 The references drive these weights. Since the retune (MOODS.md §6) they follow ten tracks from each station's own mix: guitar in 70% of Sunday's bars, 41% of rain's, 44% of autumn's and 23% of train's.
 
-**A track that draws no guitar is note for note what riff-2 wrote, on the same settings.** No other stream moves, so the guitar alone changed no track the user liked; the retune later changed the settings (MOODS.md §6). Its plan keeps the engine tag `riff-2`. A track with a guitar in it is tagged `riff-3`. With the riff off there is no guitar, as round 2 had none.
+**A track that draws no guitar is note for note what riff-2 wrote, on the same settings.** No other stream moves, so the guitar alone changed no track the user liked; the retune later changed the settings (MOODS.md §6). Its plan kept the engine tag `riff-2`, and a track with a guitar in it was tagged `riff-3`; since the hook, every plan is `hook-1` (HOOK.md §4). With the riff off there is no guitar, as round 2 had none.
 
 ## 3. Chords on the guitar
 
@@ -135,7 +135,7 @@ It is picked harder than the guitar strums, about 3.5 dB up. That puts it level 
   - 6–8 notes a bar, over a wider range than the keys' riff;
   - no lead notes, no double;
   - drawn only over a piano (`test/arrange.test.js`).
-- **No guitar, no change:** on the stations as they stood before the retune, tracks that draw no guitar hash to what `riff-2` wrote before this round.
+- **No guitar, no change:** tracks that drew no guitar hashed to what `riff-2` wrote before this round, until the hook retired the check (HOOK.md §4).
 - **The samples** play the pitch asked for (`test/sound.test.js`).
 
 ## Files

@@ -65,8 +65,9 @@ function barShape(role, I) {
 }
 
 // idea: from idea(); form: a FORMS key; band: [lo, hi] MIDI notes the melody may use; chordAt(beat) and
-// voicingAt(beat): what sounds under a beat of the section. Returns [{ beat (from the section's start), len, midi, vel }].
-export function writeMelody(R, { idea: I, form, bars, key, mode, band: [lo, hi], chordAt, voicingAt }) {
+// voicingAt(beat): what sounds under a beat of the section; hook: the melody replays, so its last bar leads back into
+// its first. Returns [{ beat (from the section's start), len, midi, vel, turn }]; turn marks that last pickup.
+export function writeMelody(R, { idea: I, form, bars, key, mode, band: [lo, hi], chordAt, voicingAt, hook = false }) {
   const phrases = Math.ceil(bars / 4);
   const plan = Array.from({ length: bars }, (_, b) => {
     const role = FORMS[form][b % 4], phrase = Math.floor(b / 4);
@@ -155,20 +156,22 @@ export function writeMelody(R, { idea: I, form, bars, key, mode, band: [lo, hi],
     for (let i = states.length - 1; i >= 0; i--) { path[i] = states[i][j]; j = best[i][j].from; }
   }
 
-  // Out to notes. A cadence bar with another bar after it gets a pickup: a step next to the next target.
+  // Out to notes. A cadence bar with another bar after it gets a pickup: a step next to the next target. A hook's
+  // last bar has its first bar after it.
   const out = [];
   path.forEach((s, i) => {
-    const P = bars_[i], next = path[i + 1];
+    const P = bars_[i], turn = hook && i === path.length - 1 && P.b === bars - 1 && bars_[0].b === 0;
+    const next = turn ? path[0] : path[i + 1];
     for (const n of s.notes) {
       const pos = (n.midi - lo) / Math.max(1, hi - lo);
       out.push({ beat: P.b * 4 + n.slot / 2, len: (n.len / 2) * 0.92, midi: n.midi, vel: n.cadence ? 0.7 : 0.62 + 0.22 * pos + (n === s.notes[0] ? 0.06 : 0) });
     }
-    if (s.notes[0].cadence && next && bars_[i + 1].b === P.b + 1) {
+    if (s.notes[0].cadence && next && (turn || bars_[i + 1].b === P.b + 1)) {
       const beat = P.b * 4 + 3.5, ch = chordAt(beat);
       const side = next.m >= s.m ? -1 : 1, m = stepFrom(next.m, side, ch);
       if (inBand(m) && !rubs(m, voicingAt(beat)) && m !== next.m) {
         out[out.length - 1].len = Math.min(out[out.length - 1].len, 3 * 0.92);
-        out.push({ beat, len: 0.46, midi: m, vel: 0.6 });
+        out.push({ beat, len: 0.46, midi: m, vel: 0.6, ...(turn ? { turn } : {}) });
       }
     }
   });
