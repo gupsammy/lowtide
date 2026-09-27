@@ -233,7 +233,7 @@ def split_track(d):
     for k in failed + (['drums'] if drumless else []):
         del P[k]
     r = {'station': station, 'source': source, 'name': name.split('--')[-1], 'tempo': float(tempo), 'bars': grid.n,
-         'parts': P, 'extra': extra, 'level': level, 'failed': failed + (['drums'] if drumless else [])}
+         'parts': P, 'extra': extra, 'level': level, 'failed': failed + (['drums'] if drumless else []), 'grid': grid, 'notes': notes}
     facts = ROOT / 'renders' / name / 'facts.json'
     if source == 'ours-split' and facts.exists():
         r['truth'] = parts_of(grid, *plan_notes(json.loads(facts.read_text())), exact=True)[0]
@@ -273,7 +273,7 @@ def calibrate(rows):
 
 def finish(r, cal):
     """The measures of each part; for a split track the repeat share corrected by the calibration."""
-    out = {k: v for k, v in r.items() if k not in ('parts', 'extra', 'truth')}
+    out = {k: v for k, v in r.items() if k not in ('parts', 'extra', 'truth', 'grid', 'notes')}
     for part, P in r['parts'].items():
         c = cal.get(part, {'threshold': 1.0, 'tpr': 1.0, 'fpr': 0.0})
         m = P.measures(c['threshold'])

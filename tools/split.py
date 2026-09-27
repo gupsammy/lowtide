@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Splits tracks into htdemucs stems (drums, bass, other, vocals) under downloads/stems/<name>/ (see research/stems.md).
+"""Splits tracks into htdemucs stems (drums, bass, other, vocals) under downloads/stems/<name>/ (see research/stems.md),
+or with --six into htdemucs_6s stems (the same plus guitar and piano) under downloads/stems6/<name>/ (research/moods.md).
 A renders/<name>/mix.wav is named after its folder; any other file after itself. Skips tracks already split.
 
-    uv run --no-project --python 3.11 --with demucs --with soundfile python tools/split.py mps downloads/refs/*.wav
+    uv run --no-project --python 3.11 --with demucs --with soundfile python tools/split.py mps [--six] downloads/refs/*.wav
 
 The first run downloads the model (~80 MB, from Hugging Face adefossez/HTDemucs). Reads and writes with soundfile, so
 torchaudio's I/O backends aren't needed. About a tenth of a track's length on an M3 Pro's GPU.
@@ -17,11 +18,13 @@ import torch
 from demucs.apply import apply_model
 from demucs.pretrained import get_model
 
-OUT = Path(__file__).resolve().parent.parent / 'downloads' / 'stems'
-dev = sys.argv[1]
-model = get_model('htdemucs')
+dev, files = sys.argv[1], sys.argv[2:]
+six = files[:1] == ['--six']
+files = files[1:] if six else files
+OUT = Path(__file__).resolve().parent.parent / 'downloads' / ('stems6' if six else 'stems')
+model = get_model('htdemucs_6s' if six else 'htdemucs')
 model.to(dev).eval()
-for f in sys.argv[2:]:
+for f in files:
     p = Path(f)
     name = p.parent.name if p.name == 'mix.wav' else p.stem
     d = OUT / name
