@@ -1,4 +1,5 @@
-// Recorded sounds: the VCSL kit in samples/ (see tools/kit.js), played as pitched instruments and as a drum kit.
+// Recorded sounds: the VCSL kit and the FreePats guitars in samples/ (see tools/kit.js), played as pitched instruments
+// and as a drum kit.
 import { TAU, rng, Biquad, hashString } from './synth/dsp.js';
 import { parseWav } from './wav.js';
 
@@ -23,11 +24,14 @@ const INSTS = {
   upright: { release: 0.18, dark: [900, 7000], level: 0.88 },
   vibes: { release: 0.35, dark: [1800, 9000], level: 1.8 },
   kalimba: { release: 0.3, dark: [1500, 9000], level: 1.35 },
+  // a string stopped by the next stroke dies fast; the clean electric is darker than the nylon from the start
+  nylon: { release: 0.12, dark: [1400, 8000], level: 1 },
+  jazz: { release: 0.1, dark: [1000, 6000], level: 1 },
 };
 
 // One note from a pitched instrument: the recording nearest in pitch (the lower one on a tie, since a sample pitched
 // down sounds more natural than one pitched up), resampled so it sounds at o.midi, corrected by the tuning the kit
-// measured. Softer notes are darker, as they are on the real instrument. o: { t, len, midi, vel, pan }.
+// measured. Softer notes are darker, as they are on the real instrument. o: { t, len, midi, vel, pan, gain }.
 export function sampledNote(L, R, sr, bank, inst, o) {
   const list = bank.byInst[inst], I = INSTS[inst];
   let s = list[0];
@@ -36,7 +40,7 @@ export function sampledNote(L, R, sr, bank, inst, o) {
   const i0 = Math.round(o.t * sr), relAt = Math.round(o.len * sr), relN = Math.round(I.release * sr);
   const n = Math.min(Math.floor((s.data.length - 2) / step), relAt + relN);
   const cut = I.dark[0] + (I.dark[1] - I.dark[0]) * o.vel * o.vel, a = Math.exp((-TAU * cut) / sr);
-  const g = I.level * Math.pow(10, (s.gain ?? 0) / 20) * Math.pow(o.vel, 1.3), pan = o.pan ?? 0, gl = g * Math.min(1, 1 - pan), gr = g * Math.min(1, 1 + pan);
+  const g = (o.gain ?? 1) * I.level * Math.pow(10, (s.gain ?? 0) / 20) * Math.pow(o.vel, 1.3), pan = o.pan ?? 0, gl = g * Math.min(1, 1 - pan), gr = g * Math.min(1, 1 + pan);
   let pos = 0, lp = 0;
   for (let i = 0; i < n; i++) {
     const j = i0 + i;

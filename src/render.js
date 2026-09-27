@@ -6,6 +6,7 @@ import { TAU, Biquad, SVF, stereo, hashString } from './synth/dsp.js';
 import { note, ep, felt, roundBass, uprightBass } from './synth/voices.js';
 import { sampledNote, buildKit, playHit } from './sampler.js';
 import { createDeck } from './deck.js';
+import { GUITARS } from './plan.js';
 
 export const PRE = 0.1; // room before the bar line for hits pushed early
 export const TAIL = 3; // room after the section for notes ringing on
@@ -48,13 +49,15 @@ export function renderSection(p, i, sr, bank, opts = {}) {
   const lanes = {}, lane = (k) => (lanes[k] ??= stereo(n));
 
   // Keys. The top note of a voicing is what the ear follows, so it's played a little stronger and the inner notes
-  // a little softer. Each pitch of the electric piano has its own few cents of detune, like a real one's tines.
+  // a little softer. Each pitch of the electric piano has its own few cents of detune, like a real one's tines. A
+  // guitar's upstroke meets the strings from the top (GUITAR.md §3).
   if (play('keys')) for (const e of p.events.keys.filter(within)) {
     const b = lane('keys');
     e.midis.forEach((midi, k) => {
-      const w = k === e.midis.length - 1 ? 1.25 : k === 0 ? 0.9 : 0.8;
-      const o = { t: at(e) + (k * e.spreadMs) / 1000, len: e.len * spb, midi, vel: Math.min(1, e.vel * w), seed: hashString(`${p.seed}:${e.beat}:${k}`) };
+      const w = k === e.midis.length - 1 ? 1.25 : k === 0 ? 0.9 : 0.8, order = e.up ? e.midis.length - 1 - k : k;
+      const o = { t: at(e) + (order * e.spreadMs) / 1000, len: e.len * spb, midi, vel: Math.min(1, e.vel * w), seed: hashString(`${p.seed}:${e.beat}:${k}`) };
       if (T.keysVoice === 'upright') sampledNote(b.L, b.R, sr, bank, 'upright', { ...o, pan: (midi - 62) / 40 });
+      else if (GUITARS.includes(T.keysVoice)) sampledNote(b.L, b.R, sr, bank, T.keysVoice, { ...o, pan: (midi - 55) / 60 });
       else if (T.keysVoice === 'ep') ep(b.L, b.R, sr, { ...o, detune: (hashString(`${p.seed}:${midi}`) % 600) / 100 - 3 }, patch);
       else felt(b.L, b.R, sr, o, patch);
     });
@@ -70,11 +73,12 @@ export function renderSection(p, i, sr, bank, opts = {}) {
     if (T.leadVoice === 'vibes' || T.leadVoice === 'kalimba') sampledNote(lane('lead').L, lane('lead').R, sr, bank, T.leadVoice, { ...o, pan: 0.15 });
     else note(lane('lead').L, lane('lead').R, sr, { ...o, voice: T.leadVoice });
   }
-  // The riff, on the keys' own sound or its own (RIFF.md §2), and its double an octave up in the final A
-  // (ARRANGE.md §1). A kalimba riff sits a little left, opposite the lead; the double sits right, where the lead was.
+  // The riff, on the keys' own sound or its own (RIFF.md §2, GUITAR.md §4), and its double an octave up in the final A
+  // (ARRANGE.md §1). A kalimba or guitar riff sits a little left, opposite the lead; the double sits right, where the
+  // lead was. A guitar playing the tune picks harder than it strums, up where the kalimba sits (GUITAR.md §4).
   for (const [k, v, pan] of [['riff', T.riffVoice === 'keys' ? T.keysVoice : T.riffVoice, -0.15], ['double', T.double, 0.25]]) if (play(k)) for (const e of (p.events[k] ?? []).filter(within)) {
     const b = lane(k), o = { t: at(e), len: e.len * spb, midi: e.midi, vel: e.vel, seed: hashString(`${p.seed}:${k}:${e.beat}`) };
-    if (v === 'upright' || v === 'vibes' || v === 'kalimba') sampledNote(b.L, b.R, sr, bank, v, { ...o, pan: v === 'upright' ? (e.midi - 62) / 40 : pan });
+    if (v === 'upright' || v === 'vibes' || v === 'kalimba' || GUITARS.includes(v)) sampledNote(b.L, b.R, sr, bank, v, { ...o, pan: v === 'upright' ? (e.midi - 62) / 40 : pan, gain: T.riff === 'guitar' ? 1.5 : 1 });
     else if (v === 'ep') ep(b.L, b.R, sr, { ...o, detune: (hashString(`${p.seed}:${e.midi}`) % 600) / 100 - 3 }, patch);
     else if (v === 'felt') felt(b.L, b.R, sr, o, patch);
     else note(b.L, b.R, sr, { ...o, voice: v });

@@ -20,7 +20,7 @@ test('with the riff off, every seed writes round 2 note for note', () => {
     const p = plan(s, st, { riff: null });
     assert.equal(p.events.riff.length + p.events.double.length, 0);
     delete p.events.riff; delete p.events.double;
-    for (const k of ['riff', 'riffVoice', 'riffNotes', 'sameB', 'version', 'leadBand', 'loopB', 'moves', 'double', 'fits']) delete p.traits[k];
+    for (const k of ['riff', 'riffVoice', 'riffNotes', 'sameB', 'version', 'leadBand', 'loopB', 'moves', 'double', 'fits', 'guitar']) delete p.traits[k];
     h.update(JSON.stringify(p));
   }
   assert.equal(h.digest('hex'), 'ea642468b4ac997bbb817a4587f64777f822bbb93cddf56266a0c6f6d1c98ea6');

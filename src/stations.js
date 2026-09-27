@@ -1,7 +1,8 @@
 // A station is a set of limits. It fixes some traits so its tracks feel related, and leaves the rest to the seed so
 // they differ. Numbers in braces are weights: how often each option comes up relative to the others; a lone number
 // (echo, grit, texture, shaker) is the share of tracks that get it. riff: its notes a bar, who plays it, and how
-// often each version of a track comes up (RIFF.md, ARRANGE.md). Picture limits are here already; the drawing
+// often each version of a track comes up (RIFF.md, ARRANGE.md). guitar: how often a guitar plays the chords or the
+// riff, and which guitar (GUITAR.md §2). Picture limits are here already; the drawing
 // arrives in a later milestone.
 
 // The riff's three roles (RIFF.md), even among those that fit a track's sounds (ARRANGE.md §1).
@@ -22,6 +23,7 @@ export const STATIONS = [
       intros: { filtered: 2, bed: 2, phone: 1, drumsFirst: 1, pickup: 1, cold: 1 }, tape: [0.3, 0.7],
       space: { t60: [1.8, 3], wet: [0.2, 0.32] }, echo: 0.5, grit: 0.3, vinyl: [0.3, 0.7], pump: [0.1, 0.25], texture: 0.45,
       riff: { notes: [4, 5], roles: RIFF_ROLES, versions: { full: 5, beat: 1 } },
+      guitar: { parts: { none: 3, chords: 1, riff: 1 }, sounds: { nylon: 1, jazz: 2 } },
     },
     picture: { style: 'ink', inks: ['blue', 'pink'], scene: 'harbour', weather: ['rain', 'drizzle'], hours: [17, 23], motion: 0.3, characters: 'lights' },
   },
@@ -38,6 +40,7 @@ export const STATIONS = [
       intros: { filtered: 1, bed: 1, phone: 1, drumsFirst: 2, pickup: 2, cold: 2 }, tape: [0.2, 0.5],
       space: { t60: [1.2, 2], wet: [0.12, 0.22] }, echo: 0.35, grit: 0.2, vinyl: [0.2, 0.5], pump: [0.1, 0.2], texture: 0.15,
       riff: { notes: [5, 6], roles: RIFF_ROLES, versions: { full: 6, beat: 2 } },
+      guitar: { parts: { none: 1, chords: 2, riff: 2 }, sounds: { nylon: 3, jazz: 1 } },
     },
     picture: { style: 'ink', inks: ['yellow', 'orange'], scene: 'lake', weather: ['clear', 'mist'], hours: [7, 13], motion: 0.4, characters: 'birds' },
   },
@@ -54,6 +57,7 @@ export const STATIONS = [
       intros: { filtered: 2, bed: 1, phone: 2, drumsFirst: 2, pickup: 1, cold: 1 }, tape: [0.3, 0.6],
       space: { t60: [1.6, 2.6], wet: [0.18, 0.3] }, echo: 0.6, grit: 0.35, vinyl: [0.3, 0.6], pump: [0.15, 0.3], texture: 0.35,
       riff: { notes: [6, 8], roles: RIFF_ROLES, versions: { full: 6, beat: 2 } },
+      guitar: { parts: { none: 1, chords: 2, riff: 2 }, sounds: { nylon: 1, jazz: 3 } },
     },
     picture: { style: 'ink', inks: ['violet', 'blue'], scene: 'town-edge', weather: ['rain'], hours: [21, 26], motion: 0.4, characters: 'lights' },
   },
@@ -70,6 +74,7 @@ export const STATIONS = [
       intros: { filtered: 1, bed: 3, phone: 1, drumsFirst: 1, pickup: 2, cold: 1 }, tape: [0.5, 0.9],
       space: { t60: [1.5, 2.5], wet: [0.16, 0.28] }, echo: 0.4, grit: 0.4, vinyl: [0.5, 0.9], pump: [0.08, 0.2], texture: 0.25,
       riff: { notes: [5, 6], roles: RIFF_ROLES, versions: { full: 5, beat: 1 } },
+      guitar: { parts: { none: 4, chords: 1, riff: 1 }, sounds: { nylon: 3, jazz: 1 } },
     },
     picture: { style: 'ink', inks: ['orange', 'green'], scene: 'hills', weather: ['wind', 'clear'], hours: [16, 19], motion: 0.35, characters: 'birds' },
   },

@@ -1,6 +1,6 @@
 {
  "sr": 22050,
- "source": "VCSL (CC0), github.com/sgossner/VCSL",
+ "source": "VCSL (CC0), github.com/sgossner/VCSL; guitars: FreePats (CC0), freepats.zenvoid.org",
  "samples": [
   {
    "id": "upright-C2",
@@ -391,6 +391,195 @@
    "file": "ocean.wav",
    "inst": "ocean",
    "seconds": 11
+  },
+  {
+   "id": "nylon-E2",
+   "file": "nylon-E2.wav",
+   "inst": "nylon",
+   "midi": 40,
+   "seconds": 3,
+   "tune": 2,
+   "gain": -5.9
+  },
+  {
+   "id": "nylon-A2",
+   "file": "nylon-A2.wav",
+   "inst": "nylon",
+   "midi": 45,
+   "seconds": 3,
+   "tune": 20,
+   "gain": -3.3
+  },
+  {
+   "id": "nylon-D3",
+   "file": "nylon-D3.wav",
+   "inst": "nylon",
+   "midi": 50,
+   "seconds": 3,
+   "tune": 4,
+   "gain": -3.9
+  },
+  {
+   "id": "nylon-G3",
+   "file": "nylon-G3.wav",
+   "inst": "nylon",
+   "midi": 55,
+   "seconds": 3,
+   "tune": -10,
+   "gain": -2.8
+  },
+  {
+   "id": "nylon-B3",
+   "file": "nylon-B3.wav",
+   "inst": "nylon",
+   "midi": 59,
+   "seconds": 2.262,
+   "tune": 18,
+   "gain": -5.8
+  },
+  {
+   "id": "nylon-E4",
+   "file": "nylon-E4.wav",
+   "inst": "nylon",
+   "midi": 64,
+   "seconds": 3,
+   "tune": 0,
+   "gain": -2.3
+  },
+  {
+   "id": "nylon-A4",
+   "file": "nylon-A4.wav",
+   "inst": "nylon",
+   "midi": 69,
+   "seconds": 3,
+   "tune": 4,
+   "gain": -8
+  },
+  {
+   "id": "nylon-D5",
+   "file": "nylon-D5.wav",
+   "inst": "nylon",
+   "midi": 74,
+   "seconds": 1.263,
+   "tune": 11,
+   "gain": -2.8
+  },
+  {
+   "id": "nylon-G5",
+   "file": "nylon-G5.wav",
+   "inst": "nylon",
+   "midi": 79,
+   "seconds": 1.424,
+   "tune": -2,
+   "gain": -4.2
+  },
+  {
+   "id": "nylon-C6",
+   "file": "nylon-C6.wav",
+   "inst": "nylon",
+   "midi": 84,
+   "seconds": 0.895,
+   "tune": 5,
+   "gain": 4.1
+  },
+  {
+   "id": "jazz-F2",
+   "file": "jazz-F2.wav",
+   "inst": "jazz",
+   "midi": 41,
+   "seconds": 3,
+   "tune": -1,
+   "gain": -11
+  },
+  {
+   "id": "jazz-A2",
+   "file": "jazz-A2.wav",
+   "inst": "jazz",
+   "midi": 45,
+   "seconds": 3,
+   "tune": 2,
+   "gain": -8.6
+  },
+  {
+   "id": "jazz-C3",
+   "file": "jazz-C3.wav",
+   "inst": "jazz",
+   "midi": 48,
+   "seconds": 3,
+   "tune": -2,
+   "gain": -7.9
+  },
+  {
+   "id": "jazz-E3",
+   "file": "jazz-E3.wav",
+   "inst": "jazz",
+   "midi": 52,
+   "seconds": 3,
+   "tune": 1,
+   "gain": -6.7
+  },
+  {
+   "id": "jazz-G3",
+   "file": "jazz-G3.wav",
+   "inst": "jazz",
+   "midi": 55,
+   "seconds": 3,
+   "tune": -7,
+   "gain": -6.5
+  },
+  {
+   "id": "jazz-B3",
+   "file": "jazz-B3.wav",
+   "inst": "jazz",
+   "midi": 59,
+   "seconds": 3,
+   "tune": -2,
+   "gain": -5.6
+  },
+  {
+   "id": "jazz-E4",
+   "file": "jazz-E4.wav",
+   "inst": "jazz",
+   "midi": 64,
+   "seconds": 3,
+   "tune": -2,
+   "gain": -3.5
+  },
+  {
+   "id": "jazz-G4",
+   "file": "jazz-G4.wav",
+   "inst": "jazz",
+   "midi": 67,
+   "seconds": 3,
+   "tune": 0,
+   "gain": -3.9
+  },
+  {
+   "id": "jazz-B4",
+   "file": "jazz-B4.wav",
+   "inst": "jazz",
+   "midi": 71,
+   "seconds": 3,
+   "tune": -1,
+   "gain": -4.9
+  },
+  {
+   "id": "jazz-D5",
+   "file": "jazz-D5.wav",
+   "inst": "jazz",
+   "midi": 74,
+   "seconds": 3,
+   "tune": 3,
+   "gain": -5.5
+  },
+  {
+   "id": "jazz-Gs5",
+   "file": "jazz-Gs5.wav",
+   "inst": "jazz",
+   "midi": 80,
+   "seconds": 3,
+   "tune": -1,
+   "gain": -4.6
   }
  ]
 }

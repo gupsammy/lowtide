@@ -266,20 +266,23 @@ function showPlaying() {
   });
 }
 
-const KEYS = { ep: 'electric piano', felt: 'felt piano', upright: 'upright piano' };
-const VERSION_NAMES = { full: 'Full', beat: 'Beat tape' }, ROLE_NAMES = { keys: 'Keys', lead: 'Lead', signature: 'Kalimba' };
+const KEYS = { ep: 'electric piano', felt: 'felt piano', upright: 'upright piano', nylon: 'nylon guitar', jazz: 'jazz guitar' };
+const VERSION_NAMES = { full: 'Full', beat: 'Beat tape' }, ROLE_NAMES = { keys: 'Keys', lead: 'Lead', signature: 'Kalimba', guitar: 'Guitar' };
+// how a guitar playing the chords strokes each comp (GUITAR.md §3)
+const STROKE_NAMES = { hold: () => 'ring', strum: (pat) => `${pat} strum`, push: (pat) => `pushed ${pat} strum`, pulse: () => 'chops' };
 const MOVE_NAMES = { drop: 'drop', ending: 'bare ending', late: 'late drums', breakdown: 'breakdown', stop: 'stop', bareBreak: 'bare break' };
 const clock = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 function cardFor(tr, problems, i) {
   const p = tr.plan, t = p.traits, S = t.space, melody = scores(p), el = document.createElement('article');
   el.className = 'card';
   const chip = (text, cls = '') => `<span class="chip ${cls}">${text}</span>`;
+  const comping = (c) => (t.guitar?.part === 'chords' ? STROKE_NAMES[c](t.guitar.pattern) : c);
   el.innerHTML = `
     <div class="top"><span class="title">${i + 1}. ${p.title}</span><span class="seed">seed ${p.seed}</span></div>
     <div class="facts">${chip(`${NOTE_NAMES[t.key]} ${t.mode}`)}${chip(`${p.bpm} bpm`)}${chip(`opens: ${t.intro}`, 'intro')}${chip(`stands out: ${t.standout}`, 'standout')}
       ${chip(KEYS[t.keysVoice])}${chip(`lead: ${t.leadVoice}`)}${chip(`${t.bassVoice} bass`)}${chip(`${t.kit} kit`)}${chip(`${t.family} beat, ${t.feel.grid}ths swung ${Math.round(t.feel.swing * 100)}%`)}
-      ${chip(t.voicing)}${chip(t.comp === t.compB ? t.comp : `${t.comp}, B ${t.compB}`)}${chip(`melody: ${t.phrase}`)}${S.echo ? chip('echo') : ''}${S.grit ? chip(`${S.grit.bits}-bit`) : ''}${S.texture ? chip('ocean bed') : ''}
-      ${t.riff ? chip(`riff: ${t.riff === 'keys' ? `keys (${KEYS[t.keysVoice]})` : t.riffVoice}, ${t.riffNotes} a bar`, 'riff') : ''}${t.riff ? chip(t.sameB ? 'B: same loop, no drums' : 'B: new chords') : ''}
+      ${t.voicing === 'guitar' ? '' : chip(t.voicing)}${chip(t.comp === t.compB ? comping(t.comp) : `${comping(t.comp)}, B ${comping(t.compB)}`)}${chip(`melody: ${t.phrase}`)}${S.echo ? chip('echo') : ''}${S.grit ? chip(`${S.grit.bits}-bit`) : ''}${S.texture ? chip('ocean bed') : ''}
+      ${t.riff ? chip(`riff: ${t.riff === 'keys' ? `keys (${KEYS[t.keysVoice]})` : KEYS[t.riffVoice] ?? t.riffVoice}, ${t.riffNotes} a bar`, 'riff') : ''}${t.riff ? chip(t.sameB ? 'B: same loop, no drums' : 'B: new chords') : ''}
       ${t.riff ? chip(p.plain ? 'moves off' : t.moves.length ? `moves: ${t.moves.map((m) => MOVE_NAMES[m]).join(', ')}` : 'no moves', 'moves') : ''}${t.double ? chip(`doubled on ${t.double} in the last A`, 'moves') : ''}</div>
     <div class="prog"><b>A</b> ${t.shape} <b>· B</b> ${t.sameB ? 'replays A' : t.shapeB}${t.shift !== 'none' ? ` <b>(${t.shift})</b>` : ''}</div>
     <div class="versions" role="group" aria-label="who plays the riff"><span class="label">riff</span>${Object.entries(ROLE_NAMES).map(([r, name]) =>

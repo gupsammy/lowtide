@@ -27,6 +27,7 @@ So this round does two things:
 | Lead | the lead's sound is vibes or kalimba | A riff wants short notes that die away. The soft synth holds and wobbles; the bell turns shrill when it repeats all track. |
 | Signature (kalimba) | the keys are the felt or upright piano | The electric piano and the kalimba both ring from struck metal tines. In the same range they blur into one. |
 
+- A fourth role, the guitar, came in later; GUITAR.md §4 has its rule.
 - The role is drawn from the station's weights, among the roles that fit. The keys always fit, so every track has a role.
 - A track with no lead sound tests the lead role against the station's commonest lead, which is the sound that role would use.
 - The lab's riff buttons on each card play any role, fit or not, so the rules can be checked by ear.

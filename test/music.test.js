@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { STATIONS } from '../src/stations.js';
-import { plan } from '../src/plan.js';
+import { plan, GUITARS } from '../src/plan.js';
 import { progression } from '../src/harmony.js';
 import { stream } from '../src/rand.js';
 import { MODES, chordPcs, mod12 } from '../src/theory.js';
@@ -69,10 +69,11 @@ test('voicings move smoothly: each voice moves little, and the top note rarely l
   assert.ok(leaps / changes < 0.05, `${leaps} of ${changes} changes leap the top note more than a third`);
 });
 
+// a guitar's chords reach down to its open low E (GUITAR.md §3)
 test('voicings sit in range, climb upward, and never hold a minor ninth', () => {
   for (const p of plans) for (const k of p.events.keys) {
     for (let i = 1; i < k.midis.length; i++) assert.ok(k.midis[i] > k.midis[i - 1]);
-    assert.ok(k.midis[0] >= 50 && k.midis[k.midis.length - 1] <= 80, `${k.midis}`);
+    assert.ok(k.midis[0] >= (GUITARS.includes(p.traits.keysVoice) ? 40 : 50) && k.midis[k.midis.length - 1] <= 80, `${k.midis}`);
     for (const a of k.midis) for (const b of k.midis) assert.notEqual(b - a, 13);
   }
 });

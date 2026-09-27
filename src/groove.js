@@ -111,6 +111,29 @@ export const COMPS = {
   strum: (beats) => [[0, beats, 0.78]], // held, with the notes rolled from the bottom up (see spread)
 };
 
+// Guitar strum patterns: [beat in the bar, up stroke] (GUITAR.md §3).
+export const STRUMS = {
+  folk: [[0, false], [1, false], [1.5, true], [2.5, true], [3, false], [3.5, true]],
+  slow: [[0, false], [1.5, true], [2, false], [3.5, true]],
+};
+
+// The guitar's strokes over one chord, from the comp the track drew: [beat offset in the chord, length, velocity, up].
+// at: where the chord starts in its bar. A ring lets one stroke sound; chops damp the pulse's hits; a strum plays the
+// pattern. A pushed strum lands each chord an eighth early and lets that stroke ring over the chord's first beat, so a
+// chord's strokes run from an eighth before it to an eighth before the next. Every chord comes in on a downstroke,
+// added where the pattern has no stroke.
+export function strokes(comp, pattern, at, beats) {
+  if (comp === 'hold') return [[0, beats, 0.8, false]];
+  if (comp === 'pulse') return COMPS.pulse(beats).map(([off, l, ve]) => [off, l * 0.35, ve, off % 1 !== 0]);
+  const from = comp === 'push' ? -0.5 : 0, to = beats + from, out = [];
+  for (let bar = Math.floor((at + from) / 4) * 4; bar < at + to; bar += 4) {
+    for (const [p, up] of STRUMS[pattern]) { const off = bar + p - at; if (off >= from && off < to && !(from && off === 0)) out.push([off, up]); }
+  }
+  if (out[0]?.[0] === from) out[0][1] = false;
+  else out.unshift([from, false]);
+  return out.map(([off, up], i) => [off, (out[i + 1]?.[0] ?? to) - off, up ? 0.55 : i === 0 ? 0.8 : 0.72, up]);
+}
+
 // Bass: [beat offset in the chord, length, velocity, which note: 'root' | 'fifth' | 'octave' | 'approach'].
 // 'kick' plays with the kick drum: kicks lists the kick positions inside the chord, in beats from its start. Each
 // note holds until the next kick; if the chord arrives between kicks, the bass still marks the change.

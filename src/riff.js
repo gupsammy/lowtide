@@ -7,19 +7,20 @@ import { mod12 } from './theory.js';
 // Eighth-note slots: the downbeat most, then the other beats, then the off-beats.
 const SLOTS = { 0: 6, 2: 3, 4: 3, 6: 3, 1: 2, 3: 2, 5: 2, 7: 2 };
 
-// R: the riff stream; notes: [lo, hi] notes a bar. Returns { rhythm: [{ slot, len }] in eighths, shape: arpeggio
+// R: the riff stream; notes: [lo, hi] notes a bar; span: how many arpeggio steps the shape may cover (the guitar's
+// riff reaches wider, GUITAR.md §4). Returns { rhythm: [{ slot, len }] in eighths, shape: arpeggio
 // steps from the bar's first note, breath: every second bar drops its last note, variant: how A′ differs }.
-export function riffCell(R, notes) {
+export function riffCell(R, notes, span = 4) {
   const count = R.int(notes), pool = { ...SLOTS }, slots = [];
   while (slots.length < count) { const s = Number(R.weighted(pool)); delete pool[s]; slots.push(s); }
   slots.sort((a, b) => a - b);
   const rhythm = slots.map((s, i) => ({ slot: s, len: (slots[i + 1] ?? Math.min(8, s + R.pick([2, 3]))) - s }));
-  // mostly single steps along the arpeggio; after a jump of two, turn back; the shape spans at most four steps
+  // mostly single steps along the arpeggio; after a jump of two, turn back; the shape spans at most `span` steps
   let step = 0, last = 0, lo = 0, hi = 0;
   const shape = rhythm.map((_, i) => {
     if (i === 0) return 0;
     let move = Math.abs(last) >= 2 ? -Math.sign(last) : Number(R.weighted({ 1: 4, '-1': 3, 2: 1.5, '-2': 1, 0: 0.7 }));
-    if (Math.max(hi, step + move) - Math.min(lo, step + move) > 4) move = -move;
+    if (Math.max(hi, step + move) - Math.min(lo, step + move) > span) move = -move;
     step += move; last = move; lo = Math.min(lo, step); hi = Math.max(hi, step);
     return step;
   });

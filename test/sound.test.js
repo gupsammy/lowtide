@@ -63,7 +63,7 @@ function centsOff(x, midi) {
 
 // Notes between the recorded ones, below the lowest, and on a kalimba whose tines are 20–40 cents off true.
 test('a sampled instrument plays the pitch asked for', () => {
-  for (const [inst, midi] of [['upright', 64], ['upright', 46], ['vibes', 70], ['kalimba', 74], ['kalimba', 78]]) {
+  for (const [inst, midi] of [['upright', 64], ['upright', 46], ['vibes', 70], ['kalimba', 74], ['kalimba', 78], ['nylon', 43], ['nylon', 62], ['jazz', 47], ['jazz', 70]]) {
     const b = stereo(sr * 2);
     sampledNote(b.L, b.R, sr, bank, inst, { t: 0, len: 1.5, midi, vel: 0.8 });
     const off = centsOff(b.L.subarray(Math.round(0.05 * sr), Math.round(0.8 * sr)), midi);

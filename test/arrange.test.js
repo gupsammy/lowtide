@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { STATIONS } from '../src/stations.js';
-import { plan } from '../src/plan.js';
+import { plan, GUITARS } from '../src/plan.js';
 import { playing } from '../src/form.js';
 
 const SEEDS = Array.from({ length: 40 }, (_, i) => 17 + i * 53);
@@ -10,15 +10,16 @@ const PLANS = STATIONS.flatMap((st) => SEEDS.map((s) => [st, s, plan(s, st)]));
 const sectionAt = (p, beat) => p.sections.find((x) => beat >= x.start - 1e-9 && beat < x.start + x.bars * 4 - 1e-9);
 const key = (e) => JSON.stringify(e);
 
-test('a drawn role fits the sounds: the lead only on vibes or kalimba, the kalimba never over the electric piano', () => {
+test('a drawn role fits the sounds: the lead only on vibes or kalimba, the kalimba never over the electric piano, the guitar only over a piano', () => {
   const seen = new Set();
   for (const [st, s, p] of PLANS) {
     const T = p.traits;
     seen.add(T.riff);
     if (T.riff === 'lead') assert.ok(['vibes', 'kalimba'].includes(T.riffVoice), `${st.id} ${s}: lead riff on ${T.riffVoice}`);
     if (T.riff === 'signature') assert.notEqual(T.keysVoice, 'ep', `${st.id} ${s}`);
+    if (T.riff === 'guitar') assert.ok(!GUITARS.includes(T.keysVoice), `${st.id} ${s}`);
   }
-  assert.deepEqual([...seen].sort(), ['keys', 'lead', 'signature']);
+  assert.deepEqual([...seen].sort(), ['guitar', 'keys', 'lead', 'signature']);
 });
 
 test('the double plays the riff an octave up in the final A, on a sound of its own, while the lead rests', () => {
