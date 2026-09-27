@@ -1,5 +1,5 @@
-// The riff, the two kinds of B and the versions (RIFF.md). The riff's repetition and density targets are in
-// test/measures.test.js with the others.
+// The riff, the two kinds of B and the versions (RIFF.md, ARRANGE.md §3). The riff's repetition and density targets
+// are in test/measures.test.js with the others; the fit rules, the double and the moves in test/arrange.test.js.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -18,9 +18,9 @@ test('with the riff off, every seed writes round 2 note for note', () => {
   const h = createHash('sha256');
   for (const st of STATIONS) for (const s of [1, 4242, 90210, 123456]) {
     const p = plan(s, st, { riff: null });
-    assert.equal(p.events.riff.length, 0);
-    delete p.events.riff;
-    for (const k of ['riff', 'riffVoice', 'riffNotes', 'sameB', 'version', 'leadBand', 'loopB']) delete p.traits[k];
+    assert.equal(p.events.riff.length + p.events.double.length, 0);
+    delete p.events.riff; delete p.events.double;
+    for (const k of ['riff', 'riffVoice', 'riffNotes', 'sameB', 'version', 'leadBand', 'loopB', 'moves', 'double', 'fits']) delete p.traits[k];
     h.update(JSON.stringify(p));
   }
   assert.equal(h.digest('hex'), 'ea642468b4ac997bbb817a4587f64777f822bbb93cddf56266a0c6f6d1c98ea6');
@@ -28,7 +28,7 @@ test('with the riff off, every seed writes round 2 note for note', () => {
 
 test('the role changes who plays the riff, not its notes, the chords or the drums', () => {
   for (const st of STATIONS) for (const s of SEEDS.slice(0, 10)) {
-    const [k, l, g] = ROLES.map((riff) => plan(s, st, { riff, version: 'full' }));
+    const [k, l, g] = ROLES.map((riff) => plan(s, st, { riff, version: 'full', moves: [], double: false }));
     // same band, other sound; each sits in its own pocket (the keys' or the lead's), so only the lean differs
     const notes = (q) => q.events.riff.map(({ beat, len, midi, vel }) => ({ beat, len, midi, vel }));
     assert.deepEqual(notes(k), notes(g));
@@ -40,30 +40,22 @@ test('the role changes who plays the riff, not its notes, the chords or the drum
   }
 });
 
-test('a version leaves out its parts and nothing else', () => {
+test('the beat tape leaves out the lead and nothing else', () => {
   for (const st of STATIONS) for (const s of SEEDS.slice(0, 10)) {
-    const [full, keys, nodrums, beat] = ['full', 'keys', 'nodrums', 'beat'].map((version) => plan(s, st, { riff: 'keys', version }));
-    // an intro that had only drums plays the keys, and the riff with them, in the versions without drums; the notes
-    // after it match, though the small human wobble in strength and timing draws on from a different place
-    const song = (q) => q.events.riff.filter((n) => n.beat >= q.sections.find((x) => x.kind !== 'intro').start).map(({ beat, len, midi }) => ({ beat, len, midi }));
-    for (const q of [keys, nodrums, beat]) { assert.deepEqual(q.chords, full.chords); assert.deepEqual(song(q), song(full)); }
-    assert.deepEqual([keys.events.drums.length, keys.events.bass.length, keys.events.lead.length], [0, 0, 0]);
-    assert.equal(nodrums.events.drums.length, 0);
-    assert.deepEqual(nodrums.events.bass, full.events.bass);
-    assert.equal(beat.events.lead.length, 0);
+    const [full, beat] = ['full', 'beat'].map((version) => plan(s, st, { riff: 'keys', version }));
+    const song = (q) => q.events.riff.map(({ beat, len, midi }) => ({ beat, len, midi }));
+    assert.deepEqual(beat.chords, full.chords);
+    assert.deepEqual(song(beat), song(full));
     assert.deepEqual(beat.events.drums, full.events.drums);
-    // no silent opening: the first section always plays something
-    for (const q of [full, keys, nodrums, beat]) {
-      const s0 = q.sections[0], end = s0.start + s0.bars * 4;
-      assert.ok(Object.values(q.events).some((list) => list.some((e) => e.beat >= s0.start && e.beat < end)), `${st.id} ${s} ${q.traits.version}`);
-    }
+    assert.deepEqual(beat.events.bass, full.events.bass);
+    assert.equal(beat.events.lead.length, 0);
   }
 });
 
 test('a B that replays the loop keeps A\'s chords and riff and loses the drums', () => {
   let seen = 0;
   for (const st of STATIONS) for (const s of SEEDS) {
-    const p = plan(s, st, { riff: 'keys', version: 'full' });
+    const p = plan(s, st, { riff: 'keys', version: 'full', moves: [] });
     if (!p.traits.sameB) continue;
     seen++;
     const A = p.sections.find((x) => x.kind === 'A'), B = p.sections.find((x) => x.kind === 'B');

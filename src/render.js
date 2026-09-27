@@ -11,9 +11,9 @@ export const PRE = 0.1; // room before the bar line for hits pushed early
 export const TAIL = 3; // room after the section for notes ringing on
 
 // Each part's level in the dry mix, and how much of it goes to the room (× the track's wet) and the echo.
-const MIX = { keys: 0.8, pad: 0.5, bass: 0.7, lead: 0.62, riff: 0.72, kick: 1, snare: 0.9, hats: 0.8 };
-const VERB = { keys: 0.9, pad: 1.4, lead: 1, riff: 0.9, snare: 0.8, hats: 0.3 };
-const ECHO = { lead: 1, keys: 0.2, riff: 0.25 };
+const MIX = { keys: 0.8, pad: 0.5, bass: 0.7, lead: 0.62, riff: 0.72, double: 0.45, kick: 1, snare: 0.9, hats: 0.8 };
+const VERB = { keys: 0.9, pad: 1.4, lead: 1, riff: 0.9, double: 1.1, snare: 0.8, hats: 0.3 };
+const ECHO = { lead: 1, keys: 0.2, riff: 0.25, double: 0.4 };
 // Each tonal part's EQ, so they stop piling into 100–400 Hz: a high-pass above what the part needs (the keys go
 // lower when no bass plays under them), then a dip in the low mids. [type, Hz, Q, dB]
 const EQ = {
@@ -21,6 +21,7 @@ const EQ = {
   pad: () => [['hp', 220, 0.7, 0], ['peak', 300, 1, -3]],
   lead: () => [['hp', 200, 0.7, 0]],
   riff: () => [['hp', 180, 0.7, 0]],
+  double: () => [['hp', 250, 0.7, 0]],
 };
 const MASTER = 0.98; // into the deck's glue stage; set so openings measure about -16 LUFS
 
@@ -38,7 +39,7 @@ function kitFor(p, bank, sr) {
   return kits.get(k);
 }
 
-// opts.only: render just these parts (keys, pad, bass, lead, riff, drums), for tests and soloing.
+// opts.only: render just these parts (keys, pad, bass, lead, riff, double, drums), for tests and soloing.
 export function renderSection(p, i, sr, bank, opts = {}) {
   const sec = p.sections[i], spb = 60 / p.bpm, { start, length } = sectionSpan(p, i);
   const n = Math.round((PRE + length + TAIL) * sr), t0 = start - PRE, from = sec.start, to = sec.start + sec.bars * 4;
@@ -69,11 +70,11 @@ export function renderSection(p, i, sr, bank, opts = {}) {
     if (T.leadVoice === 'vibes' || T.leadVoice === 'kalimba') sampledNote(lane('lead').L, lane('lead').R, sr, bank, T.leadVoice, { ...o, pan: 0.15 });
     else note(lane('lead').L, lane('lead').R, sr, { ...o, voice: T.leadVoice });
   }
-  // The riff, on the keys' own sound or its own (RIFF.md §2). A kalimba sits a little left, opposite the lead.
-  if (play('riff')) for (const e of (p.events.riff ?? []).filter(within)) {
-    const b = lane('riff'), v = T.riffVoice === 'keys' ? T.keysVoice : T.riffVoice;
-    const o = { t: at(e), len: e.len * spb, midi: e.midi, vel: e.vel, seed: hashString(`${p.seed}:riff:${e.beat}`) };
-    if (v === 'upright' || v === 'vibes' || v === 'kalimba') sampledNote(b.L, b.R, sr, bank, v, { ...o, pan: v === 'upright' ? (e.midi - 62) / 40 : -0.15 });
+  // The riff, on the keys' own sound or its own (RIFF.md §2), and its double an octave up in the final A
+  // (ARRANGE.md §1). A kalimba riff sits a little left, opposite the lead; the double sits right, where the lead was.
+  for (const [k, v, pan] of [['riff', T.riffVoice === 'keys' ? T.keysVoice : T.riffVoice, -0.15], ['double', T.double, 0.25]]) if (play(k)) for (const e of (p.events[k] ?? []).filter(within)) {
+    const b = lane(k), o = { t: at(e), len: e.len * spb, midi: e.midi, vel: e.vel, seed: hashString(`${p.seed}:${k}:${e.beat}`) };
+    if (v === 'upright' || v === 'vibes' || v === 'kalimba') sampledNote(b.L, b.R, sr, bank, v, { ...o, pan: v === 'upright' ? (e.midi - 62) / 40 : pan });
     else if (v === 'ep') ep(b.L, b.R, sr, { ...o, detune: (hashString(`${p.seed}:${e.midi}`) % 600) / 100 - 3 }, patch);
     else if (v === 'felt') felt(b.L, b.R, sr, o, patch);
     else note(b.L, b.R, sr, { ...o, voice: v });
@@ -87,7 +88,7 @@ export function renderSection(p, i, sr, bank, opts = {}) {
   if (lanes.riff && T.riffVoice === 'keys' && T.keysVoice === 'ep') chorus(lanes.riff, sr, t0);
   for (const k of ['keys', 'riff']) if (lanes[k] && sec.fx.sweep) sweep(lanes[k], sr, PRE, length);
   // everything tonal dips under each kick of the whole track, so a tail from the last section ducks too
-  if (T.space.pump) duck(['keys', 'pad', 'bass', 'lead', 'riff'].map((k) => lanes[k]).filter(Boolean), sr, t0,
+  if (T.space.pump) duck(['keys', 'pad', 'bass', 'lead', 'riff', 'double'].map((k) => lanes[k]).filter(Boolean), sr, t0,
     p.events.drums.filter((e) => e.drum === 'kick').map((e) => e.beat * spb + e.ms / 1000), T.space.pump);
 
   // EQ each tonal lane; every filter starts at rest before the section's first note, so sections still just add

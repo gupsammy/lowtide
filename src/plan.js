@@ -8,12 +8,15 @@ import { progression, scaleOf, colourChord } from './harmony.js';
 import { voice, bassNote } from './voicing.js';
 import { kickPattern, drumPattern, drumBar, busier, swingBeat, FILLS, COMPS, BASSLINES } from './groove.js';
 import { idea, writeMelody, rubs } from './melody.js';
-import { sections as buildSections, VERSIONS } from './form.js';
+import { sections as buildSections, VERSIONS, arrange, leaveOut, playing } from './form.js';
 import { riffCell, fitRiff } from './riff.js';
 
 // Which engine wrote the plan. A new engine writes different music from the same seed, so ratings and rendered tracks
 // carry this tag (MELODY.md §1). A plan with its riff switched off is round 2's, note for note.
-export const ENGINE = 'riff-1', ROUND_2 = 'melody-2';
+export const ENGINE = 'riff-2', ROUND_2 = 'melody-2';
+
+// Sounds whose notes die away fast enough to play a riff on the lead (ARRANGE.md §1).
+const PLUCKED = ['vibes', 'kalimba'];
 
 // Each track turns one trait up so it has something you remember it by.
 export const STANDOUTS = { tape: 1, mediant: 1, drag: 1, halftime: 1, strum: 1 };
@@ -22,8 +25,11 @@ const TITLE_A = ['slow', 'paper', 'late', 'quiet', 'amber', 'blue', 'soft', 'gre
 const TITLE_B = ['window', 'letters', 'tea', 'lamps', 'streets', 'rooms', 'tide', 'coats', 'hours', 'static', 'pages', 'steam', 'drift', 'wires'];
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 
-// opts.riff: the riff's role, 'keys', 'lead' or 'signature' (RIFF.md §2), or null for none; drawn when left out.
-// opts.version: 'full', 'keys', 'nodrums' or 'beat' (§4); drawn when left out, and 'full' when there is no riff.
+// opts.riff: the riff's role, 'keys', 'lead' or 'signature' (RIFF.md §2), or null for none; drawn from the roles
+// that fit the track's sounds when left out, and played as given, fit or not, when set (ARRANGE.md §1).
+// opts.version: 'full' or 'beat' (ARRANGE.md §3); drawn when left out, and 'full' when there is no riff.
+// opts.moves: the moves to apply, those of them that fit (ARRANGE.md §2); drawn when left out, none when [].
+// opts.double: whether the riff doubles in the final A; drawn when left out.
 export function plan(seed, station, opts = {}) {
   if (![undefined, null, 'keys', 'lead', 'signature'].includes(opts.riff)) throw new Error(`no riff role called ${opts.riff}`);
   if (opts.version !== undefined && !VERSIONS[opts.version]) throw new Error(`no version called ${opts.version}`);
@@ -32,12 +38,7 @@ export function plan(seed, station, opts = {}) {
   const R = (part) => stream(seed, `${station.id}:${part}`);
   const H = R('harmony'), Rh = R('rhythm'), Me = R('melody'), F = R('form'), S = R('sound'), Sp = R('space'), T = R('title');
   // the small human wobbles in timing and strength, one stream per part so a part coming in never moves another's
-  const touch = Object.fromEntries(['keys', 'bass', 'lead', 'drums', 'riff'].map((k) => [k, R(`touch:${k}`)]));
-  // The riff's role, the kind of B and the version, drawn whole every time from a stream of their own, so forcing
-  // one never moves another, and nothing else in the track moves with them.
-  const A = R('arrange'), drawn = { riff: A.weighted(M.riff.roles), sameB: A.chance(0.5), version: A.weighted(M.riff.versions) };
-  const riff = opts.riff === undefined ? drawn.riff : opts.riff;
-  const version = opts.version ?? (riff ? drawn.version : 'full'), sameB = !!riff && drawn.sameB;
+  const touch = Object.fromEntries(['keys', 'bass', 'lead', 'drums', 'riff', 'double'].map((k) => [k, R(`touch:${k}`)]));
 
   const standout = F.weighted(STANDOUTS);
   const key = H.int([0, 11]), mode = H.weighted(M.modes), colour = H.weighted(M.colour);
@@ -56,11 +57,25 @@ export function plan(seed, station, opts = {}) {
   const compB = Rh.chance(0.45) ? Rh.weighted({ ...M.comps, [comp]: 0 }) : comp; // B may comp differently, for contrast
   const bassline = Rh.weighted(M.basslines), shaker = Rh.chance(M.perc.shaker);
   const keysVoice = S.weighted(M.keys), drawnLead = S.weighted(M.leads), bassVoice = S.weighted(M.basses), kit = S.weighted(M.kits);
-  // The riff's sound. On the lead's, a track with no lead borrows the station's commonest; on the kalimba, a
-  // kalimba lead plays vibes, so the second layer doesn't copy the riff's sound.
+  // The riff's role, the kind of B, the version and the double, drawn whole every time from a stream of their own,
+  // so forcing one never moves another, and nothing else in the track moves with them. The role is drawn from those
+  // that fit the sounds: the lead's only if its notes die away fast, the kalimba's only over a piano, since the
+  // electric piano's tines blur with it. A track with no lead would play the riff on the station's commonest.
   const topLead = Object.entries(M.leads).filter(([k]) => k !== 'none').sort((a, b) => b[1] - a[1])[0][0];
+  const fits = { keys: true, lead: PLUCKED.includes(drawnLead === 'none' ? topLead : drawnLead), signature: keysVoice !== 'ep' };
+  const A = R('arrange'), drawn = {
+    riff: A.weighted(Object.entries(M.riff.roles).map(([k, w]) => [k, fits[k] ? w : 0])), sameB: A.chance(0.5),
+    version: A.weighted(M.riff.versions), double: A.chance(0.4),
+  };
+  const riff = opts.riff === undefined ? drawn.riff : opts.riff;
+  const version = opts.version ?? (riff ? drawn.version : 'full'), sameB = !!riff && drawn.sameB;
+  // The riff's sound. On the lead's, a track with no lead borrows the station's commonest; on the kalimba, a
+  // kalimba lead plays vibes, so the second layer doesn't copy the riff's sound. The double, an octave up in the
+  // final A, is a second sound that stays clear of the keys; the lead's riff already sits up there and never doubles.
   const riffVoice = { keys: 'keys', signature: 'kalimba', lead: drawnLead === 'none' ? topLead : drawnLead }[riff] ?? null;
   const leadVoice = riff === 'signature' && drawnLead === 'kalimba' ? 'vibes' : drawnLead;
+  const doubleVoice = { keys: keysVoice === 'ep' ? 'vibes' : 'kalimba', signature: 'vibes' }[riff] ?? null;
+  const double = !!doubleVoice && (opts.double ?? drawn.double);
   const tape = standout === 'tape' ? Math.min(1, M.tape[1] + 0.25) : S.range(M.tape);
   const patch = { tremRate: S.range([3, 5.5]), tremDepth: S.range([0.05, 0.25]), bright: S.range([0.3, 1]), spreadMs: S.range([18, 45]) };
   // the room and the machine the track plays through (see deck.js)
@@ -72,9 +87,6 @@ export function plan(seed, station, opts = {}) {
     grit: Sp.chance(M.grit) ? { bits: Sp.int([10, 14]), rate: Sp.range([16000, 24000]) } : null,
     vinyl: Sp.range(M.vinyl), pump: Sp.range(M.pump), texture: Sp.chance(M.texture) ? Sp.range([0.1, 0.22]) : 0,
   };
-  // without the drums the room opens up and the bed comes forward
-  if (version === 'keys') Object.assign(space, { wet: space.wet * 1.35, texture: Math.max(space.texture, 0.12) });
-  if (version === 'nodrums') Object.assign(space, { wet: space.wet * 1.15, texture: Math.max(space.texture, 0.15) });
   const intro = F.weighted(M.intros), form = F.weighted({ T1: 2, T2: 2, T3: 1.5 });
   // drawn whether or not there is a lead, so a change of lead voice never reshuffles the form
   // Over a riff the lead is a second layer and comes in no earlier than A2; when the lead plays the riff there is none.
@@ -95,7 +107,13 @@ export function plan(seed, station, opts = {}) {
   const newB = progression(H, { mode: bMode, colour, grammar: M.grammar, shapes: M.shapes, startFn: { T: 2, PD: 5, D: 1 }, avoid: [progA.shape] });
   const progB = sameB ? progA : newB;
 
-  const secs = buildSections(F, { form, intro, loopBars: Math.max(progA.bars, progB.bars), leadFrom, softB, sameB, version });
+  const secs = buildSections(F, { form, intro, loopBars: Math.max(progA.bars, progB.bars), leadFrom, softB, sameB });
+  // Parts leave and come back over the loop (ARRANGE.md §2), from a stream of their own; round 2 has no moves. They
+  // are placed on the full band, so a version changes only the parts it leaves out. The doubled riff takes the
+  // lead's band in the final A, so the lead rests there.
+  const moves = riff ? arrange(R('moves'), secs, opts.moves) : [], lastA = secs.findLastIndex((x) => x.kind === 'A');
+  for (const x of secs) leaveOut(x, VERSIONS[version]);
+  if (double) leaveOut(secs[lastA], ['lead']);
 
   // Register: the melody owns a band; the hands stay under it. A riff played above the chords sits between the two,
   // and the lead moves up to make room (RIFF.md §2).
@@ -170,7 +188,7 @@ export function plan(seed, station, opts = {}) {
 
   const sw = (b, amount = swing) => swingBeat(b, amount, grid);
   const lean = (part, ms, spread) => ms + touch[part].gauss() * feel.jitterMs * spread;
-  const chords = [], events = { keys: [], pad: [], bass: [], lead: [], drums: [], riff: [] }, cues = [];
+  const chords = [], events = { keys: [], pad: [], bass: [], lead: [], drums: [], riff: [], double: [] }, cues = [];
   let beat = 0, prevBass = 40, lastV = null;
   secs.forEach((sec, si) => {
     const isB = sec.kind === 'B', prog = isB ? progB : progA, loop = loopOf(prog, isB ? bKey : key);
@@ -199,15 +217,16 @@ export function plan(seed, station, opts = {}) {
     cues.push({ beat, type: 'section', kind: sec.kind, energy: sec.energy });
 
     // the drums, bar by bar: the section type's pattern, with a fill into the next section if it has drums too. A
-    // part a version left out counts as there, so leaving the drums out never reshuffles the rhythm stream.
+    // part a version left out counts as there, so leaving the drums out never reshuffles the rhythm stream; a hit a
+    // move leaves out still draws its wobble, so the hits after it land as they would have.
     const pattern = patternFor(sec), next = secs[si + 1];
     const bars = Array.from({ length: sec.bars }, (_, b) =>
       drumBar(pattern, b, b === sec.bars - 1 && next && (next.layers.includes('drums') || next.left?.includes('drums')) ? Rh.pick(FILLS) : null));
     if (has('drums')) bars.forEach((hits, b) => {
       for (const [s, drum, v] of hits) {
         const amount = drum === 'hat' || drum === 'open' || drum === 'shaker' ? feel.hatSwing : swing;
-        const ms = drum === 'kick' ? feel.kickMs : drum === 'snare' || drum === 'rim' ? feel.snareMs : 0;
-        events.drums.push({ beat: beat + b * 4 + swingBeat(s / 4, amount, grid), drum, vel: v, ms: lean('drums', ms, 1) });
+        const ms = lean('drums', drum === 'kick' ? feel.kickMs : drum === 'snare' || drum === 'rim' ? feel.snareMs : 0, 1);
+        if (playing(sec, 'drums', b * 4)) events.drums.push({ beat: beat + b * 4 + swingBeat(s / 4, amount, grid), drum, vel: v, ms });
       }
     });
     // straight kick positions, in beats from the section's start, for a bass that plays with the kick
@@ -240,7 +259,8 @@ export function plan(seed, station, opts = {}) {
           if (which === 'approach') { const nr = bassNote(nextC, nextC.key, root); m = nr === root ? root + 7 : nr > root ? nr - 1 : nr + 1; }
           while (m >= v[0]) m -= 12; // the bass always stays under the hands
           const at = c.start + off;
-          events.bass.push({ beat: sw(at), len: sw(at + l) - sw(at), midi: m, vel: ve, ms: lean('bass', feel.bassMs, 0.4) });
+          const ms = lean('bass', feel.bassMs, 0.4);
+          if (playing(sec, 'bass', at - beat)) events.bass.push({ beat: sw(at), len: sw(at + l) - sw(at), midi: m, vel: ve, ms });
         }
         prevBass = root;
       }
@@ -262,14 +282,19 @@ export function plan(seed, station, opts = {}) {
           if (t + n.beat >= stop || (into && t + n.beat >= len - 0.5 - 1e-9 && rubs(n.midi, into))) continue;
           const a = beat + t + n.beat;
           events.riff.push({ beat: sw(a), len: sw(a + n.len) - sw(a), midi: n.midi, vel: clamp(n.vel * (1 + 0.06 * touch.riff.gauss()), 0.3, 1), ms: lean('riff', riffMs, 0.5) });
+          if (double && si === lastA) events.double.push({ beat: sw(a), len: sw(a + n.len) - sw(a), midi: n.midi + 12, vel: clamp(n.vel * 0.9 * (1 + 0.06 * touch.double.gauss()), 0.3, 1), ms: lean('double', feel.leadMs, 0.5) });
         }
       }
     }
 
-    // over a riff the lead never plays the intro; when the lead plays the riff it has no melody of its own
-    if (has('lead') && riff !== 'lead' && !(riff && sec.kind === 'intro')) for (const n of melodyFor(sec.kind, sec.bars)) {
-      const at = beat + n.beat;
-      events.lead.push({ beat: sw(at), len: sw(at + n.len) - sw(at), midi: n.midi, vel: n.vel, ms: lean('lead', feel.leadMs, 0.5) });
+    // Over a riff the lead never plays the intro; when the lead plays the riff it has no melody of its own. A lead a
+    // version or a move left out is still written, so the melodies after it come out the same.
+    const writes = (has('lead') || sec.left?.includes('lead')) && riff !== 'lead' && !(riff && sec.kind === 'intro');
+    const written = writes ? melodyFor(sec.kind, sec.bars) : [];
+    for (const n of written) {
+      const at = beat + n.beat, ms = lean('lead', feel.leadMs, 0.5);
+      if (!has('lead')) continue;
+      events.lead.push({ beat: sw(at), len: sw(at + n.len) - sw(at), midi: n.midi, vel: n.vel, ms });
       cues.push({ beat: sw(at), type: 'note', midi: n.midi });
     }
     beat += len;
@@ -280,7 +305,8 @@ export function plan(seed, station, opts = {}) {
     key, mode, colour, bpm, shape: progA.shape, shapeB: progB.shape, loop: `${progA.bars}×${progA.perBar}`, loopB: `${progB.bars}×${progB.perBar}`, shift: sameB ? 'none' : shift,
     family, voicing, register: Math.round(center), lead, phrase, comp, compB, bassline, keysVoice, leadVoice, bassVoice, kit, shaker,
     tape, intro, form, standout, feel, patch, space,
-    riff, riffVoice, riffNotes: cell?.rhythm.length ?? null, sameB, version, leadBand: band,
+    riff, riffVoice, riffNotes: cell?.rhythm.length ?? null, sameB, version, leadBand: band, moves, double: double ? doubleVoice : null,
+    fits: Object.keys(fits).filter((k) => fits[k]),
   };
   const title = `${T.pick(TITLE_A)} ${T.pick(TITLE_B)}`;
   return { seed, station: station.id, engine: riff ? ENGINE : ROUND_2, title, bpm, traits, sections: secs, chords, events, cues, lengthBeats: beat };

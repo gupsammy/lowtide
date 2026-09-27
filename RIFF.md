@@ -6,7 +6,7 @@ In the hits the tune lives in the loop: one riff plays from the start to the end
 
 - **Three roles for the riff, all built so you can hear them on the same seeds before choosing one.** *Keys*: the keys play the riff above their chords, and the lead stays as a second layer. *Lead*: the lead's sound plays the riff and there is no separate melody. *Signature*: a new part plays the riff on the kalimba, standing in for a harp or guitar, while the keys play chords and the lead stays as a second layer.
 - **Two kinds of B, drawn per track.** *New chords*, as now, with the riff fitted to them. *Same loop*: A's chords and riff with the drums out.
-- **Versions, drawn per track and switchable while you listen:** full band, keys only, no drums, beat tape.
+- **Versions, drawn per track and switchable while you listen:** full band, keys only, no drums, beat tape. *Since replaced: ARRANGE.md picks the role from the track's sounds, keeps only the full band and the beat tape, and turns keys only and no drums into moves within a track.*
 
 ## 1. Targets
 
@@ -85,6 +85,8 @@ Each track draws one, at even odds:
 
 ## 4. Versions
 
+*Keys only and no drums are gone; see ARRANGE.md §3.*
+
 A track's version is drawn from its station's weights, and the lab can switch it. Switching writes the plan again with that version and renders from where you are, which takes about a second.
 
 | Version | Leaves out | Also | Rain | Sunday | Train | Autumn |
@@ -109,7 +111,7 @@ The melody scores (MELODY.md §1) still read the lead only.
 
 ## 6. The lab
 
-- **A riff selector** in the header: drawn, keys, lead, kalimba, or round 2 (no riff). The critic picks each batch's seeds with the drawn engine. A forced role re-plans those same seeds, so switching roles keeps the same ten tracks.
+- **A riff selector** in the header: drawn, keys, lead, kalimba, or round 2 (no riff). *Since moved onto each card; see ARRANGE.md §4.* The critic picks each batch's seeds with the drawn engine. A forced role re-plans those same seeds, so switching roles keeps the same ten tracks.
 - **A version switch on each card:** Full · Keys only · No drums · Beat tape. The drawn version is marked. Switching while the track plays carries on from the same moment.
 - **Cards** show the riff's role, its notes per bar, the kind of B and the version.
 - **Ratings** are kept per role and version. Round 2's ratings keep their old keys.

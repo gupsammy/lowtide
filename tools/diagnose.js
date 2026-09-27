@@ -3,6 +3,7 @@
 //   node tools/diagnose.js [tracks per station]
 import { STATIONS } from '../src/stations.js';
 import { plan } from '../src/plan.js';
+import { playing } from '../src/form.js';
 import { MODES, chordPcs, mod12, isMinor } from '../src/theory.js';
 import { scores } from '../src/critic.js';
 
@@ -33,7 +34,7 @@ export function measure(plans) {
     const changes = p.chords.map((c) => c.start);
     for (const b of p.events.bass) {
       const sec = p.sections.find((s) => b.beat >= s.start && b.beat < s.start + s.bars * 4);
-      if (!sec?.layers.includes('drums')) continue;
+      if (!sec || !playing(sec, 'drums', b.beat - sec.start)) continue;
       kb++;
       if (!kicks.some((k) => near(k, b.beat)) && !changes.some((c) => near(c, b.beat))) kbOff++;
     }
@@ -63,7 +64,7 @@ export function measure(plans) {
       pairs++; mSim += jac(rel(As[0]), rel(As[1]));
     }
     for (const s of p.sections) if (s.layers.includes('drums')) for (let b = 0; b + 2 < s.bars - 1; b++) {
-      if (b % 4 === 3 || (b + 2) % 4 === 3) continue;
+      if (b % 4 === 3 || (b + 2) % 4 === 3 || !playing(s, 'drums', b * 4) || !playing(s, 'drums', b * 4 + 8)) continue;
       const bar = (k) => p.events.drums.filter((e) => e.beat >= s.start + k * 4 && e.beat < s.start + k * 4 + 4).map((e) => `${(e.beat - s.start - k * 4).toFixed(3)}${e.drum}${e.vel}`);
       dPairs++; dSim += jac(bar(b), bar(b + 2));
     }

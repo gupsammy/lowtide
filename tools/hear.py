@@ -86,10 +86,27 @@ def pulse(env, sr, bpm, within=None, hop=HOP):
     return float(at.mean())
 
 
+def drum_spans(f):
+    """Where the drums play: their sections, less the bars a move takes them out of (at most one move a section)."""
+    out = []
+    for s in f['sections']:
+        if 'drums' not in s['layers']:
+            continue
+        a = s['start']
+        for c in s.get('cuts', []):
+            if 'drums' in c['out']:
+                if c['start'] > a:
+                    out.append((a, c['start']))
+                a = c['end']
+        if s['end'] > a:
+            out.append((a, s['end']))
+    return out
+
+
 def pulse_check(f, env, sr):
     found = float(librosa.feature.tempo(onset_envelope=env, sr=sr, hop_length=HOP)[0])
     rel = tempo_relation(found, f['bpm'], f['hatSwing'], f['grid'])
-    with_drums = [(s['start'], s['end']) for s in f['sections'] if 'drums' in s['layers']]
+    with_drums = drum_spans(f)
     p = pulse(env, sr, f['bpm'], with_drums) if with_drums else None
     status = worst('fail' if rel == 'other' else 'warn' if rel in ('swing', 'cross') else 'ok', grade(p, 0.4, 0.25) if p else 'n/a')
     text = f"tempo {found:.0f} found for {f['bpm']} ({rel})" + (f" · pulse {p:.2f}" if p else '')

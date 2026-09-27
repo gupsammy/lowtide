@@ -1,6 +1,6 @@
 // Renders whole tracks into renders/ for tools/hear.py to measure (see HEARING.md). Each track gets a folder with:
 //   mix.wav      the track as heard, 44.1 kHz stereo
-//   lead.wav, harmony.wav (keys, pad, bass, riff), drums.wav, bed.wav (the surface noise alone)
+//   lead.wav, harmony.wav (keys, pad, bass, riff and its double), drums.wav, bed.wav (the surface noise alone)
 //                mono stems at 22.05 kHz. They go through the room, the echo and the tape's movement but skip the
 //                saturation, grit and glue, so together they are the mix before those stages.
 //   facts.json   what the plan says the audio should carry: tempo, sections, keys, swing, the lead's band and notes;
@@ -24,7 +24,7 @@ const OUT = new URL('../renders/', import.meta.url), SR = 44100, STEM_SR = 22050
 const MUSIC = ['echo', 'reverb', 'wow', 'flutter', 'drift', 'rolloff'];
 const STEMS = {
   lead: { only: ['lead'], deck: { only: MUSIC } },
-  harmony: { only: ['keys', 'pad', 'bass', 'riff'], deck: { only: MUSIC } },
+  harmony: { only: ['keys', 'pad', 'bass', 'riff', 'double'], deck: { only: MUSIC } },
   drums: { only: ['drums'], deck: { only: MUSIC } },
   bed: { only: [], deck: { only: ['texture', 'hiss', 'vinyl', 'wow', 'flutter', 'drift', 'rolloff'] } },
 };
@@ -48,10 +48,12 @@ function facts(p) {
     lead: { voice: T.leadVoice, band: T.leadBand ?? [T.lead - 5, T.lead + 7] },
     sections: p.sections.map((s, i) => {
       const { start, length } = sectionSpan(p, i);
-      return { kind: s.kind, start, end: start + length, energy: s.energy, layers: s.layers, fx: Object.keys(s.fx), key: s.key, mode: s.mode, scale: scalePcs(s.key, s.mode) };
+      // the bars a move (ARRANGE.md §2) takes parts out of, in seconds
+      const cuts = (s.cuts ?? []).map((c) => ({ move: c.move, out: c.out, start: start + c.from * 4 * spb, end: start + c.to * 4 * spb }));
+      return { kind: s.kind, start, end: start + length, energy: s.energy, layers: s.layers, cuts, fx: Object.keys(s.fx), key: s.key, mode: s.mode, scale: scalePcs(s.key, s.mode) };
     }),
     notes: {
-      ...Object.fromEntries(['keys', 'pad', 'bass', 'lead', 'riff'].map((k) => [k, (p.events[k] ?? []).map((e) => [at(e), e.len * spb, e.midis ?? e.midi])])),
+      ...Object.fromEntries(['keys', 'pad', 'bass', 'lead', 'riff', 'double'].map((k) => [k, (p.events[k] ?? []).map((e) => [at(e), e.len * spb, e.midis ?? e.midi])])),
       drums: p.events.drums.map((e) => [at(e), e.drum, e.vel]),
     },
     chords: p.chords.map((c) => [c.start * spb, `${c.roman}${c.q}`]),

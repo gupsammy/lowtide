@@ -7,6 +7,7 @@ import { plan as planTrack, opening } from './plan.js';
 import { deriveSeed } from './rand.js';
 import { NOTE_NAMES } from './theory.js';
 import { sectionSpan, TAIL } from './render.js';
+import { playing } from './form.js';
 
 const COUNT = 10, SECONDS = 15, ROW_SECONDS = 8;
 const KEEP = 3; // whole tracks held in memory at once; each is about 45 MB of audio
@@ -19,7 +20,7 @@ let ctx, batchId = 0;
 
 // Ratings stay in this browser, keyed by engine, station and seed, so rating a track again replaces the old rating;
 // a new engine writes a different melody from the same seed, so its rating is kept apart, as is each riff role and
-// version of a track (RIFF.md §6). Each keeps the track's traits, opening and melody scores, so the ratings can later
+// version of a track (RIFF.md §6), and a track with its moves off (ARRANGE.md §4). Each keeps the track's traits, opening and melody scores, so the ratings can later
 // be read against what the engine chose.
 const KEY = 'lowtide.ratings', TAGS = ['lovely', 'stiff', 'muddy', 'samey', 'busy', 'boring'];
 const ratings = (() => {
@@ -29,7 +30,7 @@ const ratings = (() => {
   return Object.fromEntries(Object.entries(saved).map(([id, r]) => (r.engine ? [id, r] : [`melody-2:${id}`, { ...r, engine: 'melody-2' }])));
 })();
 const ratingId = (p) => {
-  const t = p.traits, more = t.riff ? [t.riff, t.version] : t.version && t.version !== 'full' ? [t.version] : [];
+  const t = p.traits, more = t.riff ? [t.riff, t.version, ...(p.plain ? ['plain'] : [])] : t.version && t.version !== 'full' ? [t.version] : [];
   return [p.engine, p.station, p.seed, ...more].join(':');
 };
 function rate(p, change) {
@@ -46,13 +47,6 @@ const counted = () => ($('export').textContent = `Export ratings (${Object.keys(
 const stationSel = $('station');
 for (const st of STATIONS) stationSel.append(new Option(`${st.name}`, st.id));
 stationSel.value = stationById(params.get('station'))?.id ?? STATIONS[0].id;
-// Who plays the riff: as each track draws it, one role for the whole batch, or none (round 2). The critic picks the
-// batch's seeds with the drawn engine, so every choice plays the same ten tracks.
-const RIFFS = { drawn: 'riff: as drawn', keys: 'riff: keys', lead: 'riff: lead', signature: 'riff: kalimba', off: 'round 2, no riff' };
-const riffSel = $('riff');
-for (const [v, name] of Object.entries(RIFFS)) riffSel.append(new Option(name, v));
-riffSel.value = RIFFS[params.get('riff')] ? params.get('riff') : 'drawn';
-const riffOpt = () => (riffSel.value === 'drawn' ? undefined : riffSel.value === 'off' ? null : riffSel.value);
 $('seed').value = params.get('seed') ?? String(Math.floor(Math.random() * 1e6));
 
 // Openings render on a pool of workers. Whole tracks stream from one more, kept free for them.
@@ -73,7 +67,7 @@ function audio() {
   return ctx;
 }
 
-// tracks[i]: { plan, station, riff, drawn (its drawn version), card, length in seconds, rerolls, opening: { L, R } once
+// tracks[i]: { plan, station, drawnRiff and drawn (the role and version it drew), card, length in seconds, rerolls, opening: { L, R } once
 // rendered, whole: see whole(), lastUse }
 const tracks = [];
 const lengthOf = (p) => { const span = sectionSpan(p, p.sections.length - 1); return span.start + span.length + TAIL; };
@@ -88,9 +82,9 @@ function openingOf(tr) {
   });
 }
 function build() {
-  const station = stationById(stationSel.value), base = Number($('seed').value) >>> 0, riff = riffOpt();
+  const station = stationById(stationSel.value), base = Number($('seed').value) >>> 0;
   ++batchId;
-  history.replaceState(null, '', `?station=${station.id}&seed=${base}${riffSel.value === 'drawn' ? '' : `&riff=${riffSel.value}`}`);
+  history.replaceState(null, '', `?station=${station.id}&seed=${base}`);
   stop();
   tracks.forEach(forget);
   $('grid').innerHTML = '';
@@ -99,9 +93,8 @@ function build() {
   for (let i = 0; i < COUNT; i++) {
     const found = nextTrack(deriveSeed(base, i), station, recent);
     recent.unshift(found.plan);
-    const plan = riff === undefined ? found.plan : planTrack(found.plan.seed, station, { riff });
-    const problems = riff === undefined ? found.problems : review(plan, station).problems;
-    const tr = { plan, station, riff, drawn: plan.traits.version, length: lengthOf(plan), rerolls: found.rerolls, opening: null, whole: null, lastUse: 0 };
+    const plan = found.plan, problems = found.problems;
+    const tr = { plan, station, drawnRiff: plan.traits.riff, drawn: plan.traits.version, length: lengthOf(plan), rerolls: found.rerolls, opening: null, whole: null, lastUse: 0 };
     tr.card = cardFor(tr, problems, i);
     $('grid').append(tr.card.el);
     tracks.push(tr);
@@ -109,14 +102,18 @@ function build() {
   }
 }
 
-// Another version of a track (RIFF.md §4): the plan written again with it, and, if the track was playing, playback
-// carrying on from the same moment once the new audio reaches it.
-function switchVersion(tr, version) {
-  if (tr.plan.traits.version === version) return;
+// The track with another riff role or version, or with its moves and double off (ARRANGE.md §4): the plan written
+// again from the same seed, and, if the track was playing, playback carrying on from the same moment once the new
+// audio reaches it. A role is played as asked, fit or not. `plain` marks a plan whose moves are off, so its ratings
+// are kept apart.
+function replan(tr, { riff = tr.plan.traits.riff, version = tr.plan.traits.version, plain = !!tr.plan.plain }) {
+  const T = tr.plan.traits;
+  if (riff === T.riff && version === T.version && plain === !!tr.plan.plain) return;
   const playing = player?.tr === tr && !player.row, from = playing ? position() : 0, paused = playing && player.paused;
   if (player?.tr === tr) stopSources();
   forget(tr);
-  tr.plan = planTrack(tr.plan.seed, tr.station, { riff: tr.riff, version });
+  tr.plan = planTrack(tr.plan.seed, tr.station, { riff, version, ...(plain ? { moves: [], double: false } : {}) });
+  if (plain) tr.plan.plain = true;
   tr.length = lengthOf(tr.plan);
   tr.opening = null;
   const old = tr.card.el;
@@ -270,7 +267,8 @@ function showPlaying() {
 }
 
 const KEYS = { ep: 'electric piano', felt: 'felt piano', upright: 'upright piano' };
-const VERSION_NAMES = { full: 'Full', keys: 'Keys only', nodrums: 'No drums', beat: 'Beat tape' };
+const VERSION_NAMES = { full: 'Full', beat: 'Beat tape' }, ROLE_NAMES = { keys: 'Keys', lead: 'Lead', signature: 'Kalimba' };
+const MOVE_NAMES = { drop: 'drop', ending: 'bare ending', late: 'late drums', breakdown: 'breakdown', stop: 'stop', bareBreak: 'bare break' };
 const clock = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 function cardFor(tr, problems, i) {
   const p = tr.plan, t = p.traits, S = t.space, melody = scores(p), el = document.createElement('article');
@@ -281,10 +279,14 @@ function cardFor(tr, problems, i) {
     <div class="facts">${chip(`${NOTE_NAMES[t.key]} ${t.mode}`)}${chip(`${p.bpm} bpm`)}${chip(`opens: ${t.intro}`, 'intro')}${chip(`stands out: ${t.standout}`, 'standout')}
       ${chip(KEYS[t.keysVoice])}${chip(`lead: ${t.leadVoice}`)}${chip(`${t.bassVoice} bass`)}${chip(`${t.kit} kit`)}${chip(`${t.family} beat, ${t.feel.grid}ths swung ${Math.round(t.feel.swing * 100)}%`)}
       ${chip(t.voicing)}${chip(t.comp === t.compB ? t.comp : `${t.comp}, B ${t.compB}`)}${chip(`melody: ${t.phrase}`)}${S.echo ? chip('echo') : ''}${S.grit ? chip(`${S.grit.bits}-bit`) : ''}${S.texture ? chip('ocean bed') : ''}
-      ${t.riff ? chip(`riff: ${t.riff === 'keys' ? `keys (${KEYS[t.keysVoice]})` : t.riffVoice}, ${t.riffNotes} a bar`, 'riff') : ''}${t.riff ? chip(t.sameB ? 'B: same loop, no drums' : 'B: new chords') : ''}</div>
+      ${t.riff ? chip(`riff: ${t.riff === 'keys' ? `keys (${KEYS[t.keysVoice]})` : t.riffVoice}, ${t.riffNotes} a bar`, 'riff') : ''}${t.riff ? chip(t.sameB ? 'B: same loop, no drums' : 'B: new chords') : ''}
+      ${t.riff ? chip(p.plain ? 'moves off' : t.moves.length ? `moves: ${t.moves.map((m) => MOVE_NAMES[m]).join(', ')}` : 'no moves', 'moves') : ''}${t.double ? chip(`doubled on ${t.double} in the last A`, 'moves') : ''}</div>
     <div class="prog"><b>A</b> ${t.shape} <b>· B</b> ${t.sameB ? 'replays A' : t.shapeB}${t.shift !== 'none' ? ` <b>(${t.shift})</b>` : ''}</div>
+    <div class="versions" role="group" aria-label="who plays the riff"><span class="label">riff</span>${Object.entries(ROLE_NAMES).map(([r, name]) =>
+      `<button data-riff="${r}" aria-pressed="${t.riff === r}"${t.fits.includes(r) ? '' : ' class="unfit" title="the fit rules wouldn\'t draw this role for this track"'}>${name}${r === tr.drawnRiff ? ' •' : ''}</button>`).join('')}</div>
     <div class="versions" role="group" aria-label="version">${Object.entries(VERSION_NAMES).map(([v, name]) =>
-      `<button data-version="${v}" aria-pressed="${t.version === v}">${name}${v === tr.drawn ? ' •' : ''}</button>`).join('')}</div>
+      `<button data-version="${v}" aria-pressed="${t.version === v}">${name}${v === tr.drawn ? ' •' : ''}</button>`).join('')}
+      ${t.riff ? `<button class="moves" aria-pressed="${!p.plain}" title="the moves and the double"${!p.plain && !t.moves.length && !t.double ? ' disabled' : ''}>Moves</button>` : ''}</div>
     ${melody ? `<div class="prog"><b>melody</b> surprise ${melody.surprise.toFixed(2)} bits <b>·</b> fit ${melody.fit.toFixed(2)} <b>·</b> new bars ${Math.round(100 * melody.fresh)}%</div>` : ''}
     <canvas width="600" height="112" aria-label="the whole track: click to play from there"></canvas>
     <div class="row"><span class="status">rendering the opening…</span><span class="time"></span><button class="play">Play</button></div>
@@ -293,7 +295,10 @@ function cardFor(tr, problems, i) {
   const canvas = el.querySelector('canvas'), status = el.querySelector('.status'), time = el.querySelector('.time'), button = el.querySelector('.play');
   canvas.onclick = (e) => { const r = canvas.getBoundingClientRect(); playWhole(tr, ((e.clientX - r.left) / r.width) * tr.length); };
   button.onclick = () => toggle(tr);
-  el.querySelectorAll('.versions button').forEach((b) => (b.onclick = () => switchVersion(tr, b.dataset.version)));
+  el.querySelectorAll('.versions [data-riff]').forEach((b) => (b.onclick = () => replan(tr, { riff: b.dataset.riff })));
+  el.querySelectorAll('.versions [data-version]').forEach((b) => (b.onclick = () => replan(tr, { version: b.dataset.version })));
+  const movesButton = el.querySelector('.versions .moves');
+  if (movesButton) movesButton.onclick = () => replan(tr, { plain: !p.plain });
   const pressed = (r) => {
     el.querySelectorAll('.vote').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.v) === r.rating)));
     el.querySelectorAll('.tag').forEach((b) => b.setAttribute('aria-pressed', String(r.tags.includes(b.dataset.tag))));
@@ -306,9 +311,15 @@ function cardFor(tr, problems, i) {
   pressed(ratings[ratingId(p)] ?? { rating: 0, tags: [] });
 
   // The waveform spans the whole track: one column per slice of time, drawn as its audio arrives, with the sections
-  // marked above it so what's heard can be matched to the form.
-  const W = canvas.width, H = canvas.height, TOP = 26, peak = new Float32Array(W), heard = new Uint8Array(W);
+  // marked above it so what's heard can be matched to the form, and a strip of who plays each bar: bright for the
+  // full band, middle without drums, dim for the loop alone.
+  const W = canvas.width, H = canvas.height, TOP = 32, peak = new Float32Array(W), heard = new Uint8Array(W);
   const perColumn = (tr.length * sr) / W, sections = p.sections.map((s, k) => ({ x: (sectionSpan(p, k).start / tr.length) * W, name: s.kind }));
+  const spb = 60 / p.bpm, BAND = ['#4a4f58', '#8a6a48', '#f0a860'];
+  const bars = p.sections.flatMap((s) => Array.from({ length: s.bars }, (_, b) => ({
+    x: ((s.start + b * 4) * spb / tr.length) * W, w: (4 * spb / tr.length) * W,
+    band: playing(s, 'drums', b * 4) ? 2 : playing(s, 'bass', b * 4) ? 1 : 0,
+  })));
   let lastShown = -1;
   function draw(pos) {
     const g = canvas.getContext('2d'), mid = TOP + (H - TOP) / 2, px = pos === null ? -1 : (pos / tr.length) * W;
@@ -321,6 +332,7 @@ function cardFor(tr, problems, i) {
       if (k) g.fillRect(x, 0, 1, H);
       if (g.measureText(s.name).width + 10 < end - x) { g.fillStyle = '#8a867e'; g.fillText(s.name, x + 5, 4); }
     });
+    for (const b of bars) { g.fillStyle = BAND[b.band]; g.fillRect(Math.round(b.x) + 1, TOP - 9, Math.max(1, Math.round(b.w) - 1), 6); }
     for (let x = 0; x < W; x++) {
       if (!heard[x]) { g.fillStyle = '#2c3038'; g.fillRect(x, mid, 1, 1); continue; }
       const y = Math.max(1, peak[x] * (H - TOP) * 0.95);
@@ -380,6 +392,5 @@ $('all').onclick = () => {
 $('row').onclick = () => { stop(); playRow(0); };
 $('stop').onclick = stop;
 stationSel.onchange = build;
-riffSel.onchange = build;
 $('seed').onchange = build;
 build();
