@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { STATIONS, stationById } from '../src/stations.js';
+import { stationById as before } from './fixtures/stations-riff2.js';
 import { plan, GUITARS } from '../src/plan.js';
 import { STRUMS, strokes, COMPS } from '../src/groove.js';
 import { mod12 } from '../src/theory.js';
@@ -82,7 +83,8 @@ test('the guitar riff is busier and wider than the keys\' riff and carries the t
   assert.ok(guitarRange > keysRange + 30 * 3, `guitar riffs span ${guitarRange / 30} semitones, the keys' ${keysRange / 30}`);
 });
 
-// Plans that draw no guitar, hashed with riff-2 before the guitar came in (engine, and the guitar's trait and fit, left out).
+// Plans that draw no guitar, hashed with riff-2 before the guitar came in (engine, and the guitar's trait and fit, left out),
+// on the settings the stations had then (MOODS.md §4).
 const RIFF_2 = {
   'rain-study': { 1: 'bb895a77e2da4239', 90210: 'ed7230321ebf8265', 123456: 'b4f46cd823721b68', 55: '769c7561439d6a63', 808: 'd1d7d0534b421ee8' },
   'sunday-porch': { 7: 'b6ae9cd59c9a1ccd', 31337: 'cf783debc66aa9bd' },
@@ -92,7 +94,7 @@ const RIFF_2 = {
 
 test('a track that draws no guitar is what riff-2 wrote, and keeps its tag', () => {
   for (const [id, seeds] of Object.entries(RIFF_2)) for (const [s, hash] of Object.entries(seeds)) {
-    const p = plan(Number(s), stationById(id));
+    const p = plan(Number(s), before(id));
     assert.equal(p.traits.guitar, null, `${id} ${s} now draws a guitar`);
     assert.equal(p.engine, 'riff-2');
     delete p.engine; delete p.traits.guitar;

@@ -13,7 +13,8 @@ import { riffCell, fitRiff } from './riff.js';
 
 // Which engine wrote the plan. A new engine writes different music from the same seed, so ratings and rendered tracks
 // carry this tag (MELODY.md §1). A plan with its riff switched off is round 2's, note for note; a plan with no guitar
-// and no mood trait in it (MOODS.md §3) is the riff round's (GUITAR.md §2).
+// and no mood trait in it (MOODS.md §3) is the riff round's (GUITAR.md §2). A station whose settings were retuned
+// carries a tuning too, since the same engine then plays other music from the same seed (MOODS.md §6).
 export const ENGINE = 'riff-3', RIFF_2 = 'riff-2', ROUND_2 = 'melody-2';
 
 // Sounds whose notes die away fast enough to play a riff on the lead (ARRANGE.md §1), the piano lead among them
@@ -326,6 +327,11 @@ export function plan(seed, station, opts = {}) {
     }
     beat += len;
   });
+  // A section's last approach aims at its own loop, but a pushed guitar chord from the next section may sound over it
+  // with its root lower down: the bass drops under whatever the guitar strums (GUITAR.md §3).
+  if (strummed) for (const b of events.bass) {
+    for (const k of events.keys) if (k.beat <= b.beat + 1e-9 && b.beat < k.beat + k.len - 1e-9) while (b.midi >= k.midis[0]) b.midi -= 12;
+  }
   cues.sort((a, b) => a.beat - b.beat);
 
   const traits = {
@@ -337,7 +343,7 @@ export function plan(seed, station, opts = {}) {
     guitar: strummed ? { part: riff === 'guitar' ? 'both' : 'chords', sound: keysVoice, pattern: gtr.pattern } : riff === 'guitar' ? { part: 'riff', sound: gtr.sound } : null,
   };
   const title = `${T.pick(TITLE_A)} ${T.pick(TITLE_B)}`;
-  return { seed, station: station.id, engine: !riff ? ROUND_2 : traits.guitar || M.steady || M.lazy || bassline === 'groove' || leadVoice === 'piano' ? ENGINE : RIFF_2, title, bpm, traits, sections: secs, chords, events, cues, lengthBeats: beat };
+  return { seed, station: station.id, tuning: station.tuning, engine: !riff ? ROUND_2 : traits.guitar || M.steady || M.lazy || bassline === 'groove' || leadVoice === 'piano' ? ENGINE : RIFF_2, title, bpm, traits, sections: secs, chords, events, cues, lengthBeats: beat };
 }
 
 // What the first few seconds of a track are made of: the things that decide whether two openings sound alike.

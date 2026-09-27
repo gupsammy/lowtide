@@ -20,7 +20,7 @@ let ctx, batchId = 0;
 
 // Ratings stay in this browser, keyed by engine, station and seed, so rating a track again replaces the old rating;
 // a new engine writes a different melody from the same seed, so its rating is kept apart, as is each riff role and
-// version of a track (RIFF.md §6), and a track with its moves off (ARRANGE.md §4). Each keeps the track's traits, opening and melody scores, so the ratings can later
+// version of a track (RIFF.md §6), a track with its moves off (ARRANGE.md §4), and a retuned station's (MOODS.md §6). Each keeps the track's traits, opening and melody scores, so the ratings can later
 // be read against what the engine chose.
 const KEY = 'lowtide.ratings', TAGS = ['lovely', 'stiff', 'muddy', 'samey', 'busy', 'boring'];
 const ratings = (() => {
@@ -31,13 +31,13 @@ const ratings = (() => {
 })();
 const ratingId = (p) => {
   const t = p.traits, more = t.riff ? [t.riff, t.version, ...(p.plain ? ['plain'] : [])] : t.version && t.version !== 'full' ? [t.version] : [];
-  return [p.engine, p.station, p.seed, ...more].join(':');
+  return [p.engine, p.station, p.seed, ...more, ...(p.tuning ? [`tuning-${p.tuning}`] : [])].join(':');
 };
 function rate(p, change) {
   const id = ratingId(p), r = { rating: 0, tags: [], ...ratings[id] };
   change(r);
   if (!r.rating && !r.tags.length) delete ratings[id];
-  else ratings[id] = { ...r, engine: p.engine, station: p.station, seed: p.seed, title: p.title, traits: p.traits, opening: opening(p), scores: scores(p), at: new Date().toISOString() };
+  else ratings[id] = { ...r, engine: p.engine, station: p.station, tuning: p.tuning, seed: p.seed, title: p.title, traits: p.traits, opening: opening(p), scores: scores(p), at: new Date().toISOString() };
   try { localStorage.setItem(KEY, JSON.stringify(ratings)); } catch {}
   counted();
   return ratings[id] ?? { rating: 0, tags: [] };
@@ -83,6 +83,7 @@ function openingOf(tr) {
 }
 function build() {
   const station = stationById(stationSel.value), base = Number($('seed').value) >>> 0;
+  $('about').innerHTML = `<b>${station.name}</b> — ${station.about}`;
   ++batchId;
   history.replaceState(null, '', `?station=${station.id}&seed=${base}`);
   stop();

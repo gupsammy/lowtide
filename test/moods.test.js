@@ -9,7 +9,6 @@ import { renderSection } from '../src/render.js';
 import { diskBank } from '../tools/disk.js';
 
 const SEEDS = Array.from({ length: 40 }, (_, i) => 11 + i * 29);
-const MOODS = ['groovy', 'chill-beats', 'afternoon-laze', 'night-lofi', 'tokyo-lofi'].map(stationById);
 const plansOf = (st, opts) => SEEDS.map((s) => plan(s, st, opts));
 
 test('groovy: the groove bass plays off the beat and stays under the keys', () => {
@@ -72,7 +71,7 @@ test('tokyo lofi: with two guitars, one strums and the other picks the tune', ()
   assert.ok(seen >= 15, `only ${seen} of ${SEEDS.length} Tokyo tracks drew two guitars`);
 });
 
-// Chord changes a bar in the A sections, as roots that differ from the chord before.
+// Our chord changes a bar in the A sections, as roots that differ from the chord before.
 const pace = (st) => {
   let changes = 0, bars = 0;
   for (const p of plansOf(st)) for (const s of p.sections.filter((x) => x.kind === 'A')) {
@@ -87,14 +86,22 @@ const pace = (st) => {
   return changes / bars;
 };
 
-test('the moods change chords in the order their reference mixes do: Tokyo, night, groovy, chill beats, afternoon', () => {
-  const [groovy, chill, afternoon, night, tokyo] = MOODS.map(pace);
-  assert.ok(tokyo < night && night < groovy && groovy < chill && chill < afternoon,
-    `tokyo ${tokyo.toFixed(2)}, night ${night.toFixed(2)}, groovy ${groovy.toFixed(2)}, chill ${chill.toFixed(2)}, afternoon ${afternoon.toFixed(2)}`);
+// Each station's reference mix, in chord changes a bar as research/moods.md measured it from the bass. The two
+// measures differ in size, so only the order is compared, and only between mixes a clear step apart.
+const REFERENCE_PACE = {
+  'autumn-field': 0.61, 'tokyo-lofi': 0.75, 'night-lofi': 0.81, 'afternoon-laze': 0.93, 'last-train': 0.93,
+  'chill-beats': 0.98, groovy: 1.02, 'rain-study': 1.06, 'sunday-porch': 1.28,
+};
+
+test('stations change chords in the order their reference mixes do', () => {
+  const ours = Object.fromEntries(STATIONS.map((st) => [st.id, pace(st)]));
+  for (const [a, ra] of Object.entries(REFERENCE_PACE)) for (const [b, rb] of Object.entries(REFERENCE_PACE)) {
+    if (rb - ra >= 0.15) assert.ok(ours[a] < ours[b], `${a} ${ours[a].toFixed(2)} (mix ${ra}) against ${b} ${ours[b].toFixed(2)} (mix ${rb})`);
+  }
 });
 
-test('every mood station plans tracks the critic passes, in its own tempo', () => {
-  for (const st of MOODS) {
+test('every station plans tracks the critic passes, in its own tempo', () => {
+  for (const st of STATIONS) {
     let recent = [], rerolls = 0;
     for (const s of SEEDS.slice(0, 15)) {
       const r = nextTrack(s, st, recent);

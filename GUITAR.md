@@ -1,6 +1,6 @@
 # lowtide — guitar
 
-`research/moods.md` found that guitar is what most of the user's reference moods share: it plays in 50–100% of bars in six of nine groups. Lowtide has none. The references' tune is also busier and wider than ours: about 8 notes a bar over two octaves, against our 5 within one.
+The first pass of `research/moods.md`, at three tracks a mix, found that guitar is what most of the user's reference moods share: it played in 50–100% of bars in six of nine groups. Lowtide has none. The references' tune is also busier and wider than ours: about 8 notes a bar over two octaves, against our 5 within one.
 
 **Agreed:**
 
@@ -32,12 +32,12 @@ It also draws which guitar, its strum pattern and how fast it strums.
 
 | | Rain | Sunday | Train | Autumn |
 |---|---|---|---|---|
-| none · chords · riff | 3 · 1 · 1 | 1 · 2 · 2 | 1 · 2 · 2 | 4 · 1 · 1 |
+| none · chords · riff | 3 · 1 · 1 | 1 · 2 · 2 | 3 · 0.5 · 0.5 | 5 · 2 · 2 |
 | nylon · jazz | 1 · 2 | 3 · 1 | 1 · 3 | 3 · 1 |
 
-The references drive these weights: guitar in nearly every bar of the Sunday and train picks, and in 40% of the rain picks. The autumn picks had none, but a nylon guitar suits the station's folk feel, so it gets a little.
+The references drive these weights. Since the retune (MOODS.md §6) they follow ten tracks from each station's own mix: guitar in 70% of Sunday's bars, 41% of rain's, 44% of autumn's and 23% of train's.
 
-**A track that draws no guitar is note for note what it was.** No other stream moves, so every track the user liked stays as it was. Its plan keeps the engine tag `riff-2`, so its ratings carry over. A track with a guitar in it is tagged `riff-3`. With the riff off there is no guitar, as round 2 had none.
+**A track that draws no guitar is note for note what riff-2 wrote, on the same settings.** No other stream moves, so the guitar alone changed no track the user liked; the retune later changed the settings (MOODS.md §6). Its plan keeps the engine tag `riff-2`. A track with a guitar in it is tagged `riff-3`. With the riff off there is no guitar, as round 2 had none.
 
 ## 3. Chords on the guitar
 
@@ -60,7 +60,7 @@ The usual rules still apply: the voicing stays under the ceiling, and no close i
 
 Under a low ceiling, fewer than 1% of chords find no shape with the root at the bottom, even as a three-note shell. They play rootless, as the piano does, over the bass's root.
 
-The bass plays under the lowest note. A pushed chord can land on the bass's approach note, and its root may sit under that note. Under a guitar, the approach then comes up from a semitone below the new root.
+The bass plays under the lowest note. A pushed chord can land on the bass's approach note, and its root may sit under that note. Under a guitar, the approach then comes up from a semitone below the new root. At a section's end the pushed chord may be the next section's, which the approach doesn't aim at; the bass then drops an octave under it.
 
 ### Strokes
 
@@ -135,7 +135,7 @@ It is picked harder than the guitar strums, about 3.5 dB up. That puts it level 
   - 6–8 notes a bar, over a wider range than the keys' riff;
   - no lead notes, no double;
   - drawn only over a piano (`test/arrange.test.js`).
-- **No guitar, no change:** tracks that draw no guitar hash to what `riff-2` wrote before this round.
+- **No guitar, no change:** on the stations as they stood before the retune, tracks that draw no guitar hash to what `riff-2` wrote before this round.
 - **The samples** play the pitch asked for (`test/sound.test.js`).
 
 ## Files

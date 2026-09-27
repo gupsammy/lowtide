@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { STATIONS } from '../src/stations.js';
+import { STATIONS as BEFORE } from './fixtures/stations-riff2.js';
 import { plan } from '../src/plan.js';
 import { riffCell, fitRiff } from '../src/riff.js';
 import { stream } from '../src/rand.js';
@@ -16,8 +17,8 @@ const sounding = (list, t) => list.filter((e) => e.beat <= t + 1e-9 && t < e.bea
 // Taken from round 2's engine before the riff was added: with the riff off, a seed must write that track exactly.
 test('with the riff off, every seed writes round 2 note for note', () => {
   const h = createHash('sha256');
-  // the four stations round 2 had (MOODS.md §4)
-  for (const st of STATIONS.slice(0, 4)) for (const s of [1, 4242, 90210, 123456]) {
+  // the four stations round 2 had, with the settings they had then (MOODS.md §4)
+  for (const st of BEFORE.slice(0, 4)) for (const s of [1, 4242, 90210, 123456]) {
     const p = plan(s, st, { riff: null });
     assert.equal(p.events.riff.length + p.events.double.length, 0);
     delete p.events.riff; delete p.events.double;
