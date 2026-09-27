@@ -1,4 +1,4 @@
-// Measures planned tracks against the targets in DESIGN.md ("What must change, in numbers"), plus a few figures that
+// Measures planned tracks against the targets in DESIGN.md ("What must change, in numbers") and RIFF.md §1, plus a few figures that
 // have no target but are worth watching, and each station's melody scores (MELODY.md §1). Reads plans only; no audio.
 //   node tools/diagnose.js [tracks per station]
 import { STATIONS } from '../src/stations.js';
@@ -106,11 +106,41 @@ export function measure(plans) {
   }
   m.outOfMode = outside / inKey; m.uniformColour = uniform / plans.length;
 
-  // Expression: how much the keys' strength varies within a track.
-  m.keysVelSpread = plans.reduce((acc, p) => {
+  // Expression: how much the keys' strength varies within a track. A B that replays A's loop with the drums out
+  // (RIFF.md §3) swaps the loudest section for a quiet one, which narrows the keys by design, so it is left out here.
+  const dynamic = plans.filter((p) => !p.traits.sameB);
+  m.keysVelSpread = dynamic.reduce((acc, p) => {
     const v = p.events.keys.map((k) => k.vel), mean = v.reduce((a, b) => a + b, 0) / v.length;
     return acc + Math.sqrt(v.reduce((a, b) => a + (b - mean) ** 2, 0) / v.length);
-  }, 0) / plans.length;
+  }, 0) / dynamic.length;
+
+  // The riff (RIFF.md §1). Notes a bar, in the sections between the intro and the outro. Repeats: across the whole
+  // track, the share of bars with riff notes that equal the bar one loop earlier, at the lag of 1, 2, 4 or 8 bars where
+  // that share is highest, as tools/stems.py measures the hits. Takes: each pass of a chord loop, grouped by loop, and
+  // the share of passes that are their loop's commonest take. Repeats are kept apart by the kind of B: a B with new
+  // chords changes every bar where it follows A, so only a B that replays A's loop compares with the hits.
+  let rBars = 0, rNotes = 0, passes = 0, main = 0;
+  const rep = { same: [0, 0], fresh: [0, 0] };
+  for (const p of plans) {
+    if (!p.events.riff.length) continue;
+    const bars = (from, n = 1) => p.events.riff.filter((x) => x.beat >= from * 4 - 1e-9 && x.beat < (from + n) * 4 - 1e-9)
+      .map((x) => `${(x.beat - from * 4).toFixed(3)}:${x.midi}`).join(' ');
+    const all = Array.from({ length: p.lengthBeats / 4 }, (_, b) => bars(b));
+    const share = (l) => { let n = 0, k = 0; for (let b = l; b < all.length; b++) if (all[b] || all[b - l]) { n++; if (all[b] === all[b - l]) k++; } return [k, n]; };
+    const [k, n] = [1, 2, 4, 8].map(share).reduce((a, c) => (c[0] / Math.max(1, c[1]) > a[0] / Math.max(1, a[1]) ? c : a));
+    const r = rep[p.traits.sameB ? 'same' : 'fresh'];
+    r[0] += k; r[1] += n;
+    const takes = {};
+    for (const s of p.sections) {
+      if (s.kind === 'intro' || s.kind === 'outro' || !s.layers.includes('keys')) continue;
+      const own = s.kind === 'B' && !p.traits.sameB, L = Number((own ? p.traits.loopB : p.traits.loop).split('×')[0]), t = (takes[own ? 'B' : 'A'] ??= {});
+      for (let b = 0; b < s.bars; b++) { rBars++; rNotes += all[s.start / 4 + b].split(' ').filter(Boolean).length; }
+      for (let b = 0; b + L <= s.bars; b += L) { const take = bars(s.start / 4 + b, L); t[take] = (t[take] ?? 0) + 1; }
+    }
+    for (const t of Object.values(takes)) { const c = Object.values(t); passes += c.reduce((a, b) => a + b, 0); main += Math.max(...c); }
+  }
+  m.riffPerBar = rNotes / Math.max(1, rBars); m.riffMain = main / Math.max(1, passes);
+  m.riffRepeat = rep.same[0] / Math.max(1, rep.same[1]); m.riffRepeatNewB = rep.fresh[0] / Math.max(1, rep.fresh[1]);
   return m;
 }
 
@@ -125,6 +155,9 @@ export const TARGETS = [
   ['melody moving by step', 'steps', (x) => x >= 0.7, '≥ 70%'],
   ['in-key chords coloured outside the mode', 'outOfMode', (x) => x === 0, '0%'],
   ['keys velocity spread', 'keysVelSpread', (x) => x >= 0.1, '≥ 0.1'],
+  ['riff bars repeating a loop earlier, same-loop B', 'riffRepeat', (x) => x >= 0.75, '≥ 75%'],
+  ['loops played as the main take', 'riffMain', (x) => x >= 0.6, '≥ 60%'],
+  ['riff notes a bar', 'riffPerBar', (x) => x >= 4 && x <= 8, '4–8'],
 ];
 
 // Each station's median and 10–90% range of the critic's melody scores, and of the bars the lead leaves empty in the
@@ -152,11 +185,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const plans = STATIONS.flatMap((st) => Array.from({ length: per }, (_, i) => plan(11 + i * 29, st)));
   const m = measure(plans), pct = (x) => `${(100 * x).toFixed(1)}%`;
   console.log(`${plans.length} plans\n`);
-  for (const [name, k, ok, target] of TARGETS) console.log(`${ok(m[k]) ? 'ok  ' : 'MISS'} ${name.padEnd(48)} ${(k === 'keysVelSpread' ? m[k].toFixed(3) : pct(m[k])).padStart(7)}   target ${target}`);
+  for (const [name, k, ok, target] of TARGETS) console.log(`${ok(m[k]) ? 'ok  ' : 'MISS'} ${name.padEnd(48)} ${(k === 'keysVelSpread' || k === 'riffPerBar' ? m[k].toFixed(k === 'riffPerBar' ? 1 : 3) : pct(m[k])).padStart(7)}   target ${target}`);
   console.log(`\n     melody a semitone above a keys note, anywhere      ${pct(m.rubAny).padStart(7)}`);
   console.log(`     leaps of a fourth or more                          ${pct(m.leaps).padStart(7)}   turn back after one ${pct(m.turnsAfterLeap)}`);
   console.log(`     phrase peak by quarter                             ${m.peakByQuarter.map(pct).join(' ')}`);
   console.log(`     tracks with one colour per chord kind              ${pct(m.uniformColour).padStart(7)}`);
+  console.log(`     riff bars repeating a loop earlier, new-chord B    ${pct(m.riffRepeatNewB).padStart(7)}`);
 
   // the melody scores, median [10–90%] per station
   const S = stationScores(plans), cols = ['surprise', 'fit', 'colour', 'anchoring', 'hook', 'exact', 'fresh'];

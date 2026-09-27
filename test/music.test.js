@@ -47,8 +47,9 @@ test('chords stay in the mode, apart from the named borrowings and substitutions
   }
 });
 
-test("section B never reuses section A's progression", () => {
-  for (const p of plans) assert.notEqual(p.traits.shape, p.traits.shapeB, `${p.station} ${p.seed}`);
+// A B that replays A's loop does so on purpose (RIFF.md §3); one with its own chords must not copy A's.
+test("a B with new chords never reuses section A's progression", () => {
+  for (const p of plans) if (!p.traits.sameB) assert.notEqual(p.traits.shape, p.traits.shapeB, `${p.station} ${p.seed}`);
 });
 
 // Measured against the same engine with the movement cost switched off: its top note moves 2.3 semitones per change

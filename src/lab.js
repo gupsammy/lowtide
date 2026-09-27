@@ -2,8 +2,8 @@
 // the openings play back to back, so sameness can be heard rather than argued about; and tracks are rated, so taste
 // can be measured rather than guessed.
 import { STATIONS, stationById } from './stations.js';
-import { nextTrack, scores } from './critic.js';
-import { opening } from './plan.js';
+import { nextTrack, review, scores } from './critic.js';
+import { plan as planTrack, opening } from './plan.js';
 import { deriveSeed } from './rand.js';
 import { NOTE_NAMES } from './theory.js';
 import { sectionSpan, TAIL } from './render.js';
@@ -18,8 +18,9 @@ const sr = 44100;
 let ctx, batchId = 0;
 
 // Ratings stay in this browser, keyed by engine, station and seed, so rating a track again replaces the old rating;
-// a new engine writes a different melody from the same seed, so its rating is kept apart. Each keeps the track's
-// traits, opening and melody scores, so the ratings can later be read against what the engine chose.
+// a new engine writes a different melody from the same seed, so its rating is kept apart, as is each riff role and
+// version of a track (RIFF.md §6). Each keeps the track's traits, opening and melody scores, so the ratings can later
+// be read against what the engine chose.
 const KEY = 'lowtide.ratings', TAGS = ['lovely', 'stiff', 'muddy', 'samey', 'busy', 'boring'];
 const ratings = (() => {
   let saved = {};
@@ -27,7 +28,10 @@ const ratings = (() => {
   // ratings saved before engines were tagged are melody-2's
   return Object.fromEntries(Object.entries(saved).map(([id, r]) => (r.engine ? [id, r] : [`melody-2:${id}`, { ...r, engine: 'melody-2' }])));
 })();
-const ratingId = (p) => `${p.engine}:${p.station}:${p.seed}`;
+const ratingId = (p) => {
+  const t = p.traits, more = t.riff ? [t.riff, t.version] : t.version && t.version !== 'full' ? [t.version] : [];
+  return [p.engine, p.station, p.seed, ...more].join(':');
+};
 function rate(p, change) {
   const id = ratingId(p), r = { rating: 0, tags: [], ...ratings[id] };
   change(r);
@@ -42,6 +46,13 @@ const counted = () => ($('export').textContent = `Export ratings (${Object.keys(
 const stationSel = $('station');
 for (const st of STATIONS) stationSel.append(new Option(`${st.name}`, st.id));
 stationSel.value = stationById(params.get('station'))?.id ?? STATIONS[0].id;
+// Who plays the riff: as each track draws it, one role for the whole batch, or none (round 2). The critic picks the
+// batch's seeds with the drawn engine, so every choice plays the same ten tracks.
+const RIFFS = { drawn: 'riff: as drawn', keys: 'riff: keys', lead: 'riff: lead', signature: 'riff: kalimba', off: 'round 2, no riff' };
+const riffSel = $('riff');
+for (const [v, name] of Object.entries(RIFFS)) riffSel.append(new Option(name, v));
+riffSel.value = RIFFS[params.get('riff')] ? params.get('riff') : 'drawn';
+const riffOpt = () => (riffSel.value === 'drawn' ? undefined : riffSel.value === 'off' ? null : riffSel.value);
 $('seed').value = params.get('seed') ?? String(Math.floor(Math.random() * 1e6));
 
 // Openings render on a pool of workers. Whole tracks stream from one more, kept free for them.
@@ -62,32 +73,57 @@ function audio() {
   return ctx;
 }
 
-// tracks[i]: { plan, card, length in seconds, rerolls, opening: { L, R } once rendered, whole: see whole(), lastUse }
+// tracks[i]: { plan, station, riff, drawn (its drawn version), card, length in seconds, rerolls, opening: { L, R } once
+// rendered, whole: see whole(), lastUse }
 const tracks = [];
+const lengthOf = (p) => { const span = sectionSpan(p, p.sections.length - 1); return span.start + span.length + TAIL; };
+function openingOf(tr) {
+  const p = tr.plan, id = batchId;
+  render(p, SECONDS).then((res) => {
+    if (id !== batchId || tr.plan !== p) return;
+    if (res.error) { tr.card.status(`render failed: ${res.error}`, true); return; }
+    tr.opening = res;
+    tr.card.peaks(res.L, res.R, 0);
+    if (!tr.whole) tr.card.status(`opening rendered in ${(res.ms / 1000).toFixed(1)} s`);
+  });
+}
 function build() {
-  const station = stationById(stationSel.value), base = Number($('seed').value) >>> 0, id = ++batchId;
-  history.replaceState(null, '', `?station=${station.id}&seed=${base}`);
+  const station = stationById(stationSel.value), base = Number($('seed').value) >>> 0, riff = riffOpt();
+  ++batchId;
+  history.replaceState(null, '', `?station=${station.id}&seed=${base}${riffSel.value === 'drawn' ? '' : `&riff=${riffSel.value}`}`);
   stop();
   tracks.forEach(forget);
   $('grid').innerHTML = '';
   tracks.length = 0;
   const recent = [];
   for (let i = 0; i < COUNT; i++) {
-    const { plan, rerolls, problems } = nextTrack(deriveSeed(base, i), station, recent);
-    recent.unshift(plan);
-    const last = plan.sections.length - 1, span = sectionSpan(plan, last);
-    const tr = { plan, length: span.start + span.length + TAIL, rerolls, opening: null, whole: null, lastUse: 0 };
+    const found = nextTrack(deriveSeed(base, i), station, recent);
+    recent.unshift(found.plan);
+    const plan = riff === undefined ? found.plan : planTrack(found.plan.seed, station, { riff });
+    const problems = riff === undefined ? found.problems : review(plan, station).problems;
+    const tr = { plan, station, riff, drawn: plan.traits.version, length: lengthOf(plan), rerolls: found.rerolls, opening: null, whole: null, lastUse: 0 };
     tr.card = cardFor(tr, problems, i);
     $('grid').append(tr.card.el);
     tracks.push(tr);
-    render(plan, SECONDS).then((res) => {
-      if (id !== batchId) return;
-      if (res.error) { tr.card.status(`render failed: ${res.error}`, true); return; }
-      tr.opening = res;
-      tr.card.peaks(res.L, res.R, 0);
-      if (!tr.whole) tr.card.status(`opening rendered in ${(res.ms / 1000).toFixed(1)} s`);
-    });
+    openingOf(tr);
   }
+}
+
+// Another version of a track (RIFF.md §4): the plan written again with it, and, if the track was playing, playback
+// carrying on from the same moment once the new audio reaches it.
+function switchVersion(tr, version) {
+  if (tr.plan.traits.version === version) return;
+  const playing = player?.tr === tr && !player.row, from = playing ? position() : 0, paused = playing && player.paused;
+  if (player?.tr === tr) stopSources();
+  forget(tr);
+  tr.plan = planTrack(tr.plan.seed, tr.station, { riff: tr.riff, version });
+  tr.length = lengthOf(tr.plan);
+  tr.opening = null;
+  const old = tr.card.el;
+  tr.card = cardFor(tr, review(tr.plan, tr.station).problems, tracks.indexOf(tr));
+  old.replaceWith(tr.card.el);
+  openingOf(tr);
+  if (playing && !paused) playWhole(tr, from);
 }
 
 // A whole track, streamed from the worker a section at a time: { id, chunks: [{ offset, buf }], rendered, total, done }
@@ -234,6 +270,7 @@ function showPlaying() {
 }
 
 const KEYS = { ep: 'electric piano', felt: 'felt piano', upright: 'upright piano' };
+const VERSION_NAMES = { full: 'Full', keys: 'Keys only', nodrums: 'No drums', beat: 'Beat tape' };
 const clock = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 function cardFor(tr, problems, i) {
   const p = tr.plan, t = p.traits, S = t.space, melody = scores(p), el = document.createElement('article');
@@ -243,8 +280,11 @@ function cardFor(tr, problems, i) {
     <div class="top"><span class="title">${i + 1}. ${p.title}</span><span class="seed">seed ${p.seed}</span></div>
     <div class="facts">${chip(`${NOTE_NAMES[t.key]} ${t.mode}`)}${chip(`${p.bpm} bpm`)}${chip(`opens: ${t.intro}`, 'intro')}${chip(`stands out: ${t.standout}`, 'standout')}
       ${chip(KEYS[t.keysVoice])}${chip(`lead: ${t.leadVoice}`)}${chip(`${t.bassVoice} bass`)}${chip(`${t.kit} kit`)}${chip(`${t.family} beat, ${t.feel.grid}ths swung ${Math.round(t.feel.swing * 100)}%`)}
-      ${chip(t.voicing)}${chip(t.comp === t.compB ? t.comp : `${t.comp}, B ${t.compB}`)}${chip(`melody: ${t.phrase}`)}${S.echo ? chip('echo') : ''}${S.grit ? chip(`${S.grit.bits}-bit`) : ''}${S.texture ? chip('ocean bed') : ''}</div>
-    <div class="prog"><b>A</b> ${t.shape} <b>· B</b> ${t.shapeB}${t.shift !== 'none' ? ` <b>(${t.shift})</b>` : ''}</div>
+      ${chip(t.voicing)}${chip(t.comp === t.compB ? t.comp : `${t.comp}, B ${t.compB}`)}${chip(`melody: ${t.phrase}`)}${S.echo ? chip('echo') : ''}${S.grit ? chip(`${S.grit.bits}-bit`) : ''}${S.texture ? chip('ocean bed') : ''}
+      ${t.riff ? chip(`riff: ${t.riff === 'keys' ? `keys (${KEYS[t.keysVoice]})` : t.riffVoice}, ${t.riffNotes} a bar`, 'riff') : ''}${t.riff ? chip(t.sameB ? 'B: same loop, no drums' : 'B: new chords') : ''}</div>
+    <div class="prog"><b>A</b> ${t.shape} <b>· B</b> ${t.sameB ? 'replays A' : t.shapeB}${t.shift !== 'none' ? ` <b>(${t.shift})</b>` : ''}</div>
+    <div class="versions" role="group" aria-label="version">${Object.entries(VERSION_NAMES).map(([v, name]) =>
+      `<button data-version="${v}" aria-pressed="${t.version === v}">${name}${v === tr.drawn ? ' •' : ''}</button>`).join('')}</div>
     ${melody ? `<div class="prog"><b>melody</b> surprise ${melody.surprise.toFixed(2)} bits <b>·</b> fit ${melody.fit.toFixed(2)} <b>·</b> new bars ${Math.round(100 * melody.fresh)}%</div>` : ''}
     <canvas width="600" height="112" aria-label="the whole track: click to play from there"></canvas>
     <div class="row"><span class="status">rendering the opening…</span><span class="time"></span><button class="play">Play</button></div>
@@ -253,6 +293,7 @@ function cardFor(tr, problems, i) {
   const canvas = el.querySelector('canvas'), status = el.querySelector('.status'), time = el.querySelector('.time'), button = el.querySelector('.play');
   canvas.onclick = (e) => { const r = canvas.getBoundingClientRect(); playWhole(tr, ((e.clientX - r.left) / r.width) * tr.length); };
   button.onclick = () => toggle(tr);
+  el.querySelectorAll('.versions button').forEach((b) => (b.onclick = () => switchVersion(tr, b.dataset.version)));
   const pressed = (r) => {
     el.querySelectorAll('.vote').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.v) === r.rating)));
     el.querySelectorAll('.tag').forEach((b) => b.setAttribute('aria-pressed', String(r.tags.includes(b.dataset.tag))));
@@ -339,5 +380,6 @@ $('all').onclick = () => {
 $('row').onclick = () => { stop(); playRow(0); };
 $('stop').onclick = stop;
 stationSel.onchange = build;
+riffSel.onchange = build;
 $('seed').onchange = build;
 build();

@@ -11,7 +11,7 @@ is read from the notes its plan wrote into facts.json: the truth for that render
 
 Bars come from beat tracking on the drum stem (on the mix when the track has no drums), folded into 62–125 bpm, with
 the downbeat where the kick is strong, the snare weak and the chords change. Positions are in 16ths. Parts: the riff
-is the top note on each 16th of `other` (keys, pad and lead in a plan); the loop is all of `other`; the bass is its
+is the top note on each 16th of `other` (keys, pad, lead and riff in a plan); the loop is all of `other`; the bass is its
 lowest note on each 16th; drums are onsets in three bands. Per part: events per bar, range (5th–95th percentile,
 semitones), the loop length (1, 2, 4 or 8 bars) at which bars sound most alike and their median likeness there
 (fingerprint cosine, below), the share of playing bars that repeat the bar one loop earlier (same pitch classes, each
@@ -179,7 +179,7 @@ def db(x, ref):
 
 def plan_notes(F):
     N = F['notes']
-    other = [(t, t + ln, p, 1.0) for k in ('keys', 'pad', 'lead') for t, ln, m in N[k] for p in (m if isinstance(m, list) else [m])]
+    other = [(t, t + ln, p, 1.0) for k in ('keys', 'pad', 'lead', 'riff') for t, ln, m in N.get(k, []) for p in (m if isinstance(m, list) else [m])]
     return other, [(t, t + ln, m, 1.0) for t, ln, m in N['bass']], [(t, DRUM_BAND[k], v) for t, k, v in N['drums']]
 
 

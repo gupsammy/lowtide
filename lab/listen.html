@@ -22,6 +22,10 @@
   .facts { display: flex; flex-wrap: wrap; gap: 4px; }
   .chip { font-size: 11.5px; padding: 1px 7px; border-radius: 99px; border: 1px solid var(--line); color: var(--dim); }
   .chip.intro { color: var(--accent); border-color: #5a4630; } .chip.standout { color: var(--good); border-color: #2f4a38; }
+  .chip.riff { color: #9ec3f0; border-color: #2e4260; }
+  .versions { display: flex; flex-wrap: wrap; gap: 4px; }
+  .versions button { padding: 3px 9px; font-size: 12px; border-radius: 99px; color: var(--dim); }
+  .versions button[aria-pressed="true"] { color: var(--text); border-color: var(--accent); background: #3a2c1c; }
   .prog { font-size: 12.5px; color: var(--text); font-variant-numeric: tabular-nums; word-break: break-word; }
   .prog b { color: var(--dim); font-weight: 400; }
   canvas { width: 100%; height: 56px; display: block; border-radius: 5px; background: #16181c; cursor: pointer; }
@@ -42,12 +46,13 @@
   <h1>lowtide <span>listening lab</span></h1>
   <select id="station" aria-label="station"></select>
   <input id="seed" aria-label="first seed" inputmode="numeric">
+  <select id="riff" aria-label="who plays the riff"></select>
   <button id="batch">New batch</button>
   <button id="all" class="primary">Play all</button>
   <button id="row">Openings in a row</button>
   <button id="stop">Stop</button>
   <button id="export">Export ratings</button>
-  <div class="note">Ten tracks in radio order, as the critic lets them through. "Play all" plays each track in full, then the next, as the radio will; click a waveform to jump within a track. "Openings in a row" plays the first 8 seconds of each back to back: if two sound alike, the engine has failed. Rate with 👍 or 👎 and any tags that fit; ratings stay in this browser until you export them.</div>
+  <div class="note">Ten tracks in radio order, as the critic lets them through. "Play all" plays each track in full, then the next, as the radio will; click a waveform to jump within a track. "Openings in a row" plays the first 8 seconds of each back to back: if two sound alike, the engine has failed. Rate with 👍 or 👎 and any tags that fit; ratings stay in this browser until you export them. The riff menu plays the same ten tracks with the riff on the keys, on the lead's sound, on a kalimba, or not at all (round 2). Each card's version buttons play the track in full, on keys alone, without drums, or without the lead; • marks the version the track drew.</div>
 </header>
 <main id="grid"></main>
 <script type="module" src="../src/lab.js"></script>

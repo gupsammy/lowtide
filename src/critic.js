@@ -105,6 +105,14 @@ export function review(p, station, recent = []) {
     const c = chordAt(p, n.beat);
     if (!chordPcs(c.key + c.root, c.q).includes(mod12(n.midi))) { problems.push(`melody leaves ${c.roman}${c.q} on a strong beat (${n.beat})`); break; }
   }
+  // the riff sits between the chords and the lead (RIFF.md §5)
+  const sounding = (list, t) => list.filter((e) => e.beat <= t + 1e-9 && t < e.beat + e.len - 1e-9);
+  for (const n of p.events.riff ?? []) {
+    if (sounding(p.events.keys, n.beat).some((k) => rubs(n.midi, k.midis))) { problems.push(`the riff grinds against the keys at beat ${n.beat.toFixed(2)}`); break; }
+  }
+  for (const n of p.events.lead) {
+    if (sounding(p.events.riff ?? [], n.beat).some((r) => r.midi >= n.midi)) { problems.push(`melody dips under the riff at beat ${n.beat.toFixed(2)}`); break; }
+  }
   for (const k of p.events.keys) {
     if (k.midis.some((m, i) => i && m <= k.midis[i - 1])) { problems.push('a voicing has crossed or doubled notes'); break; }
     const under = p.events.bass.find((b) => b.beat <= k.beat && b.beat + b.len > k.beat);
@@ -133,11 +141,11 @@ export function review(p, station, recent = []) {
   return { ok: problems.length === 0, problems, scores: scores(p) };
 }
 
-// The next track for a station: the seed's own plan if it passes, else re-rolls from it.
-export function nextTrack(seed, station, recent = [], maxTries = 40) {
+// The next track for a station: the seed's own plan if it passes, else re-rolls from it. opts go to plan().
+export function nextTrack(seed, station, recent = [], opts = {}, maxTries = 40) {
   let p, r;
   for (let i = 0; i < maxTries; i++) {
-    p = plan(i ? deriveSeed(seed, i) : seed, station);
+    p = plan(i ? deriveSeed(seed, i) : seed, station, opts);
     r = review(p, station, recent);
     if (r.ok) return { plan: p, rerolls: i, problems: [], scores: r.scores };
   }
