@@ -1,6 +1,6 @@
 # lowtide
 
-A radio that writes its own lofi in the browser, from music rules rather than stock progressions, so no two tracks open alike. The plan and its reasons are in [SPEC.md](SPEC.md); how round 2 is built is in [DESIGN.md](DESIGN.md); the melody round is in [MELODY.md](MELODY.md); the riff in the loop is in [RIFF.md](RIFF.md); who plays the riff, and parts dropping out and back over it, are in [ARRANGE.md](ARRANGE.md); the guitar is in [GUITAR.md](GUITAR.md); how rendered tracks are measured is in [HEARING.md](HEARING.md).
+A radio that writes its own lofi in the browser, from music rules rather than stock progressions, so no two tracks open alike. The plan and its reasons are in [SPEC.md](SPEC.md); how round 2 is built is in [DESIGN.md](DESIGN.md); the melody round is in [MELODY.md](MELODY.md); the riff in the loop is in [RIFF.md](RIFF.md); who plays the riff, and parts dropping out and back over it, are in [ARRANGE.md](ARRANGE.md); the guitar is in [GUITAR.md](GUITAR.md); the mood stations are in [MOODS.md](MOODS.md); how rendered tracks are measured is in [HEARING.md](HEARING.md).
 
 ## Run
 

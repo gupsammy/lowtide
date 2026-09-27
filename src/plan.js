@@ -13,11 +13,12 @@ import { riffCell, fitRiff } from './riff.js';
 
 // Which engine wrote the plan. A new engine writes different music from the same seed, so ratings and rendered tracks
 // carry this tag (MELODY.md §1). A plan with its riff switched off is round 2's, note for note; a plan with no guitar
-// in it is the riff round's (GUITAR.md §2).
+// and no mood trait in it (MOODS.md §3) is the riff round's (GUITAR.md §2).
 export const ENGINE = 'riff-3', RIFF_2 = 'riff-2', ROUND_2 = 'melody-2';
 
-// Sounds whose notes die away fast enough to play a riff on the lead (ARRANGE.md §1).
-const PLUCKED = ['vibes', 'kalimba'];
+// Sounds whose notes die away fast enough to play a riff on the lead (ARRANGE.md §1), the piano lead among them
+// (MOODS.md §3).
+const PLUCKED = ['vibes', 'kalimba', 'piano'];
 // The guitars (GUITAR.md), and how busy and wide the guitar's riff is: notes a bar, and arpeggio steps its shape spans.
 export const GUITARS = ['nylon', 'jazz'];
 const GUITAR_RIFF = { notes: [6, 8], span: 7 };
@@ -52,7 +53,8 @@ export function plan(seed, station, opts = {}) {
   const bpm = Math.round(Rh.range(M.bpm));
   const grid = Number(Rh.weighted(M.grids)), swing = Rh.range(grid === 8 ? M.swing8 : M.swing);
   const family = standout === 'halftime' ? 'half' : Rh.weighted(M.families);
-  const drag = standout === 'drag';
+  // a lazy station plays every track behind the beat, as the drag standout does (MOODS.md §3)
+  const drag = standout === 'drag' || !!M.lazy;
   const kickMs = drag ? Rh.range([-12, -6]) : Rh.range([-5, 2]);
   const feel = {
     grid, swing, hatSwing: clamp(swing + (drag ? 0.04 : Rh.range([-0.01, 0.03])), 0.5, 0.7),
@@ -64,27 +66,29 @@ export function plan(seed, station, opts = {}) {
   const compB = Rh.chance(0.45) ? Rh.weighted({ ...M.comps, [comp]: 0 }) : comp; // B may comp differently, for contrast
   const bassline = Rh.weighted(M.basslines), shaker = Rh.chance(M.perc.shaker);
   const piano = S.weighted(M.keys), drawnLead = S.weighted(M.leads), bassVoice = S.weighted(M.basses), kit = S.weighted(M.kits);
-  // The guitar's part, none, the chords or the riff, and its sound, pattern and strum speed, from a stream of their
-  // own, so a track that draws no guitar is note for note what it was (GUITAR.md §2).
+  // The guitar's part, none, the chords, the riff or both (MOODS.md §3), and its sound, pattern and strum speed, from a
+  // stream of their own, so a track that draws no guitar is note for note what it was (GUITAR.md §2).
   const G = R('guitar'), gtr = { part: G.weighted(M.guitar.parts), sound: G.weighted(M.guitar.sounds), pattern: G.pick(Object.keys(STRUMS)), spreadMs: G.range([6, 11]) };
-  const keysVoice = opts.riff !== null && gtr.part === 'chords' ? gtr.sound : piano, strummed = GUITARS.includes(keysVoice);
+  const chordsOnGuitar = gtr.part === 'chords' || gtr.part === 'both';
+  const keysVoice = opts.riff !== null && chordsOnGuitar ? gtr.sound : piano, strummed = GUITARS.includes(keysVoice);
   // The riff's role, the kind of B, the version and the double, drawn whole every time from a stream of their own,
   // so forcing one never moves another, and nothing else in the track moves with them. The role is drawn from those
   // that fit the sounds: the lead's only if its notes die away fast, the kalimba's only over a piano, since the
   // electric piano's tines blur with it. A track with no lead would play the riff on the station's commonest.
   const topLead = Object.entries(M.leads).filter(([k]) => k !== 'none').sort((a, b) => b[1] - a[1])[0][0];
-  const fits = { keys: true, lead: PLUCKED.includes(drawnLead === 'none' ? topLead : drawnLead), signature: keysVoice !== 'ep', guitar: !strummed };
+  const fits = { keys: true, lead: PLUCKED.includes(drawnLead === 'none' ? topLead : drawnLead), signature: keysVoice !== 'ep', guitar: !strummed || gtr.part === 'both' };
   const A = R('arrange'), drawn = {
     riff: A.weighted(Object.entries(M.riff.roles).map(([k, w]) => [k, fits[k] ? w : 0])), sameB: A.chance(0.5),
     version: A.weighted(M.riff.versions), double: A.chance(0.4),
   };
   // a guitar drawn to play the riff takes the role over the one the arrange stream drew
-  const riff = opts.riff === undefined ? (gtr.part === 'riff' ? 'guitar' : drawn.riff) : opts.riff;
+  const riff = opts.riff === undefined ? (gtr.part === 'riff' || gtr.part === 'both' ? 'guitar' : drawn.riff) : opts.riff;
   const version = opts.version ?? (riff ? drawn.version : 'full'), sameB = !!riff && drawn.sameB;
   // The riff's sound. On the lead's, a track with no lead borrows the station's commonest; on the kalimba, a
   // kalimba lead plays vibes, so the second layer doesn't copy the riff's sound. The double, an octave up in the
   // final A, is a second sound that stays clear of the keys; the lead's riff already sits up there and never doubles.
-  const riffVoice = { keys: 'keys', signature: 'kalimba', lead: drawnLead === 'none' ? topLead : drawnLead, guitar: gtr.sound }[riff] ?? null;
+  // A guitar riff over guitar chords goes to the other guitar.
+  const riffVoice = { keys: 'keys', signature: 'kalimba', lead: drawnLead === 'none' ? topLead : drawnLead, guitar: strummed ? GUITARS.find((g) => g !== keysVoice) : gtr.sound }[riff] ?? null;
   const leadVoice = riff === 'signature' && drawnLead === 'kalimba' ? 'vibes' : drawnLead;
   const doubleVoice = { keys: keysVoice === 'ep' ? 'vibes' : 'kalimba', signature: 'vibes' }[riff] ?? null;
   const double = !!doubleVoice && (opts.double ?? drawn.double);
@@ -120,11 +124,11 @@ export function plan(seed, station, opts = {}) {
   const newB = progression(H, { mode: bMode, colour, grammar: M.grammar, shapes: M.shapes, startFn: { T: 2, PD: 5, D: 1 }, avoid: [progA.shape] });
   const progB = sameB ? progA : newB;
 
-  const secs = buildSections(F, { form, intro, loopBars: Math.max(progA.bars, progB.bars), leadFrom, softB, sameB });
+  const secs = buildSections(F, { form, intro, loopBars: Math.max(progA.bars, progB.bars), leadFrom, softB, sameB, steady: !!M.steady });
   // Parts leave and come back over the loop (ARRANGE.md §2), from a stream of their own; round 2 has no moves. They
   // are placed on the full band, so a version changes only the parts it leaves out. The doubled riff takes the
   // lead's band in the final A, so the lead rests there.
-  const moves = riff ? arrange(R('moves'), secs, opts.moves) : [], lastA = secs.findLastIndex((x) => x.kind === 'A');
+  const moves = riff ? arrange(R('moves'), secs, opts.moves, !!M.steady) : [], lastA = secs.findLastIndex((x) => x.kind === 'A');
   for (const x of secs) leaveOut(x, VERSIONS[version]);
   if (double) leaveOut(secs[lastA], ['lead']);
 
@@ -330,10 +334,10 @@ export function plan(seed, station, opts = {}) {
     tape, intro, form, standout, feel, patch, space,
     riff, riffVoice, riffNotes: cell?.rhythm.length ?? null, sameB, version, leadBand: band, moves, double: double ? doubleVoice : null,
     fits: Object.keys(fits).filter((k) => fits[k]),
-    guitar: strummed ? { part: 'chords', sound: keysVoice, pattern: gtr.pattern } : riff === 'guitar' ? { part: 'riff', sound: gtr.sound } : null,
+    guitar: strummed ? { part: riff === 'guitar' ? 'both' : 'chords', sound: keysVoice, pattern: gtr.pattern } : riff === 'guitar' ? { part: 'riff', sound: gtr.sound } : null,
   };
   const title = `${T.pick(TITLE_A)} ${T.pick(TITLE_B)}`;
-  return { seed, station: station.id, engine: !riff ? ROUND_2 : traits.guitar ? ENGINE : RIFF_2, title, bpm, traits, sections: secs, chords, events, cues, lengthBeats: beat };
+  return { seed, station: station.id, engine: !riff ? ROUND_2 : traits.guitar || M.steady || M.lazy || bassline === 'groove' || leadVoice === 'piano' ? ENGINE : RIFF_2, title, bpm, traits, sections: secs, chords, events, cues, lengthBeats: beat };
 }
 
 // What the first few seconds of a track are made of: the things that decide whether two openings sound alike.

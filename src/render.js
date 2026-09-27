@@ -24,6 +24,7 @@ const EQ = {
   riff: () => [['hp', 180, 0.7, 0]],
   double: () => [['hp', 250, 0.7, 0]],
 };
+const PIANO_LEAD = 2; // the piano lead on the upright's samples, raised to sit with the other leads (about -25 dB against vibes -24.5)
 const MASTER = 0.98; // into the deck's glue stage; set so openings measure about -16 LUFS
 
 // Where section i sits in the track, in seconds.
@@ -68,9 +69,11 @@ export function renderSection(p, i, sr, bank, opts = {}) {
     const o = { t: at(e), len: e.len * spb, midi: e.midi, vel: e.vel, seed: hashString(`${p.seed}:bass:${e.beat}`) };
     (T.bassVoice === 'upright' ? uprightBass : roundBass)(lane('bass').L, lane('bass').R, sr, o);
   }
+  // the piano lead plays the upright's samples (MOODS.md §3)
   if (play('lead')) for (const e of p.events.lead.filter(within)) {
     const o = { t: at(e), len: e.len * spb, midi: e.midi, vel: e.vel, seed: p.seed };
     if (T.leadVoice === 'vibes' || T.leadVoice === 'kalimba') sampledNote(lane('lead').L, lane('lead').R, sr, bank, T.leadVoice, { ...o, pan: 0.15 });
+    else if (T.leadVoice === 'piano') sampledNote(lane('lead').L, lane('lead').R, sr, bank, 'upright', { ...o, pan: 0.15, gain: PIANO_LEAD });
     else note(lane('lead').L, lane('lead').R, sr, { ...o, voice: T.leadVoice });
   }
   // The riff, on the keys' own sound or its own (RIFF.md §2, GUITAR.md §4), and its double an octave up in the final A
@@ -78,7 +81,8 @@ export function renderSection(p, i, sr, bank, opts = {}) {
   // lead was. A guitar playing the tune picks harder than it strums, up where the kalimba sits (GUITAR.md §4).
   for (const [k, v, pan] of [['riff', T.riffVoice === 'keys' ? T.keysVoice : T.riffVoice, -0.15], ['double', T.double, 0.25]]) if (play(k)) for (const e of (p.events[k] ?? []).filter(within)) {
     const b = lane(k), o = { t: at(e), len: e.len * spb, midi: e.midi, vel: e.vel, seed: hashString(`${p.seed}:${k}:${e.beat}`) };
-    if (v === 'upright' || v === 'vibes' || v === 'kalimba' || GUITARS.includes(v)) sampledNote(b.L, b.R, sr, bank, v, { ...o, pan: v === 'upright' ? (e.midi - 62) / 40 : pan, gain: T.riff === 'guitar' ? 1.5 : 1 });
+    if (v === 'piano') sampledNote(b.L, b.R, sr, bank, 'upright', { ...o, pan, gain: PIANO_LEAD });
+    else if (v === 'upright' || v === 'vibes' || v === 'kalimba' || GUITARS.includes(v)) sampledNote(b.L, b.R, sr, bank, v, { ...o, pan: v === 'upright' ? (e.midi - 62) / 40 : pan, gain: T.riff === 'guitar' ? 1.5 : 1 });
     else if (v === 'ep') ep(b.L, b.R, sr, { ...o, detune: (hashString(`${p.seed}:${e.midi}`) % 600) / 100 - 3 }, patch);
     else if (v === 'felt') felt(b.L, b.R, sr, o, patch);
     else note(b.L, b.R, sr, { ...o, voice: v });

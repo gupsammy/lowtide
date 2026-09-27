@@ -10,14 +10,15 @@ const PLANS = STATIONS.flatMap((st) => SEEDS.map((s) => [st, s, plan(s, st)]));
 const sectionAt = (p, beat) => p.sections.find((x) => beat >= x.start - 1e-9 && beat < x.start + x.bars * 4 - 1e-9);
 const key = (e) => JSON.stringify(e);
 
-test('a drawn role fits the sounds: the lead only on vibes or kalimba, the kalimba never over the electric piano, the guitar only over a piano', () => {
+test('a drawn role fits the sounds: the lead only on vibes, kalimba or piano, the kalimba never over the electric piano, the guitar over a piano or the other guitar', () => {
   const seen = new Set();
   for (const [st, s, p] of PLANS) {
     const T = p.traits;
     seen.add(T.riff);
-    if (T.riff === 'lead') assert.ok(['vibes', 'kalimba'].includes(T.riffVoice), `${st.id} ${s}: lead riff on ${T.riffVoice}`);
+    if (T.riff === 'lead') assert.ok(['vibes', 'kalimba', 'piano'].includes(T.riffVoice), `${st.id} ${s}: lead riff on ${T.riffVoice}`);
     if (T.riff === 'signature') assert.notEqual(T.keysVoice, 'ep', `${st.id} ${s}`);
-    if (T.riff === 'guitar') assert.ok(!GUITARS.includes(T.keysVoice), `${st.id} ${s}`);
+    // over guitar chords only as Tokyo's two guitars, the other guitar picking (MOODS.md §3)
+    if (T.riff === 'guitar' && GUITARS.includes(T.keysVoice)) assert.ok(T.guitar.part === 'both' && T.riffVoice !== T.keysVoice, `${st.id} ${s}`);
   }
   assert.deepEqual([...seen].sort(), ['guitar', 'keys', 'lead', 'signature']);
 });

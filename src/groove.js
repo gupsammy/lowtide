@@ -147,4 +147,16 @@ export const BASSLINES = {
   walk: (beats) => beats >= 4
     ? [[0, 1.8, 0.9, 'root'], [2, 1.3, 0.7, beats > 4 ? 'octave' : 'fifth'], [beats - 0.5, 0.45, 0.6, 'approach']]
     : [[0, beats * 0.9, 0.9, 'root']],
+  // Groovy's syncopated bass (MOODS.md §3), each bar: the root, a soft root a sixteenth before 2, the octave on the and
+  // of 2, the root on the and of 3; then an approach on the chord's last sixteenth
+  groove: (beats) => {
+    const out = [];
+    for (let b = 0; b < beats; b += 4) {
+      for (const [o, ...rest] of [[0, 0.65, 0.9, 'root'], [0.75, 0.2, 0.5, 'root'], [1.5, 0.45, 0.75, 'octave'], [2.5, 0.45, 0.72, 'root']]) {
+        if (b + o < beats) out.push([b + o, ...rest]);
+      }
+    }
+    if (beats >= 4) out.push([beats - 0.25, 0.2, 0.6, 'approach']);
+    return out;
+  },
 };

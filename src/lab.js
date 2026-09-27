@@ -276,12 +276,14 @@ function cardFor(tr, problems, i) {
   const p = tr.plan, t = p.traits, S = t.space, melody = scores(p), el = document.createElement('article');
   el.className = 'card';
   const chip = (text, cls = '') => `<span class="chip ${cls}">${text}</span>`;
-  const comping = (c) => (t.guitar?.part === 'chords' ? STROKE_NAMES[c](t.guitar.pattern) : c);
+  const comping = (c) => (t.guitar?.part === 'chords' || t.guitar?.part === 'both' ? STROKE_NAMES[c](t.guitar.pattern) : c);
+  // the mood stations' traits (MOODS.md §3); the piano lead shows in the lead chip
+  const M = tr.station.music, mood = [t.bassline === 'groove' && 'groove bass', M.steady && 'the beat never stops', M.lazy && 'behind the beat', t.guitar?.part === 'both' && 'two guitars'].filter(Boolean);
   el.innerHTML = `
     <div class="top"><span class="title">${i + 1}. ${p.title}</span><span class="seed">seed ${p.seed}</span></div>
     <div class="facts">${chip(`${NOTE_NAMES[t.key]} ${t.mode}`)}${chip(`${p.bpm} bpm`)}${chip(`opens: ${t.intro}`, 'intro')}${chip(`stands out: ${t.standout}`, 'standout')}
       ${chip(KEYS[t.keysVoice])}${chip(`lead: ${t.leadVoice}`)}${chip(`${t.bassVoice} bass`)}${chip(`${t.kit} kit`)}${chip(`${t.family} beat, ${t.feel.grid}ths swung ${Math.round(t.feel.swing * 100)}%`)}
-      ${t.voicing === 'guitar' ? '' : chip(t.voicing)}${chip(t.comp === t.compB ? comping(t.comp) : `${comping(t.comp)}, B ${comping(t.compB)}`)}${chip(`melody: ${t.phrase}`)}${S.echo ? chip('echo') : ''}${S.grit ? chip(`${S.grit.bits}-bit`) : ''}${S.texture ? chip('ocean bed') : ''}
+      ${t.voicing === 'guitar' ? '' : chip(t.voicing)}${chip(t.comp === t.compB ? comping(t.comp) : `${comping(t.comp)}, B ${comping(t.compB)}`)}${chip(`melody: ${t.phrase}`)}${S.echo ? chip('echo') : ''}${S.grit ? chip(`${S.grit.bits}-bit`) : ''}${S.texture ? chip('ocean bed') : ''}${mood.map((m) => chip(m, 'standout')).join('')}
       ${t.riff ? chip(`riff: ${t.riff === 'keys' ? `keys (${KEYS[t.keysVoice]})` : KEYS[t.riffVoice] ?? t.riffVoice}, ${t.riffNotes} a bar`, 'riff') : ''}${t.riff ? chip(t.sameB ? 'B: same loop, no drums' : 'B: new chords') : ''}
       ${t.riff ? chip(p.plain ? 'moves off' : t.moves.length ? `moves: ${t.moves.map((m) => MOVE_NAMES[m]).join(', ')}` : 'no moves', 'moves') : ''}${t.double ? chip(`doubled on ${t.double} in the last A`, 'moves') : ''}</div>
     <div class="prog"><b>A</b> ${t.shape} <b>· B</b> ${t.sameB ? 'replays A' : t.shapeB}${t.shift !== 'none' ? ` <b>(${t.shift})</b>` : ''}</div>

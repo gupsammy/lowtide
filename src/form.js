@@ -32,8 +32,8 @@ export function leaveOut(s, parts) {
 export const playing = (s, part, t) => s.layers.includes(part) && !s.cuts?.some((c) => c.out.includes(part) && t >= c.from * 4 - 1e-9 && t < c.to * 4 - 1e-9);
 
 // Build the list of sections, with the full band. loopBars: the progression's length, so sections hold whole loops.
-// sameB: B replays A's loop with the drums out.
-export function sections(R, { form, intro, loopBars, leadFrom, softB, sameB = false }) {
+// sameB: B replays A's loop with the drums out, unless the station is steady (MOODS.md §3) and its beat never stops.
+export function sections(R, { form, intro, loopBars, leadFrom, softB, sameB = false, steady = false }) {
   const whole = (n) => Math.max(loopBars, Math.ceil(n / loopBars) * loopBars);
   const I = INTROS[intro];
   let aCount = 0;
@@ -55,7 +55,7 @@ export function sections(R, { form, intro, loopBars, leadFrom, softB, sameB = fa
     }
   }
   // a B that replays A's loop leaves out its drums
-  for (const s of out) if (sameB && s.kind === 'B') leaveOut(s, ['drums']);
+  for (const s of out) if (sameB && !steady && s.kind === 'B') leaveOut(s, ['drums']);
   return out;
 }
 
@@ -92,15 +92,16 @@ function apply(S, move, edits) {
 }
 
 // Draw a track's moves and apply them to its sections: one to three, at most one to a section, none with a move it
-// rules out (`not`), keeping the drums in at least half the A and B bars. only: the moves to apply instead, those of them that fit. Returns the moves' names.
-export function arrange(R, S, only) {
+// rules out (`not`), keeping the drums in at least half the A and B bars. only: the moves to apply instead, those of them that fit. On a steady
+// station no move takes the drums out. Returns the moves' names.
+export function arrange(R, S, only, steady = false) {
   const count = only ? Infinity : R.weighted({ 1: 1, 2: 3, 3: 2 }), used = new Set(), chosen = [];
   const copy = () => S.map((s) => ({ ...s, layers: [...s.layers], cuts: s.cuts && [...s.cuts] }));
   while (chosen.length < count) {
     const fits = Object.entries(MOVES).filter(([name, m]) => {
       if (chosen.includes(name) || m.not?.some((k) => chosen.includes(k)) || (only && !only.includes(name))) return false;
       const edits = m.place(S);
-      if (!edits || edits.some(([i]) => used.has(i))) return false;
+      if (!edits || edits.some(([i]) => used.has(i)) || (steady && edits.some(([, , , out]) => out.includes('drums')))) return false;
       const T = copy();
       apply(T, name, edits);
       return quiet(T) <= 0.5;

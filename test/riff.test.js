@@ -16,7 +16,8 @@ const sounding = (list, t) => list.filter((e) => e.beat <= t + 1e-9 && t < e.bea
 // Taken from round 2's engine before the riff was added: with the riff off, a seed must write that track exactly.
 test('with the riff off, every seed writes round 2 note for note', () => {
   const h = createHash('sha256');
-  for (const st of STATIONS) for (const s of [1, 4242, 90210, 123456]) {
+  // the four stations round 2 had (MOODS.md §4)
+  for (const st of STATIONS.slice(0, 4)) for (const s of [1, 4242, 90210, 123456]) {
     const p = plan(s, st, { riff: null });
     assert.equal(p.events.riff.length + p.events.double.length, 0);
     delete p.events.riff; delete p.events.double;
@@ -52,7 +53,7 @@ test('the beat tape leaves out the lead and nothing else', () => {
   }
 });
 
-test('a B that replays the loop keeps A\'s chords and riff and loses the drums', () => {
+test('a B that replays the loop keeps A\'s chords and riff and loses the drums, unless the station is steady', () => {
   let seen = 0;
   for (const st of STATIONS) for (const s of SEEDS) {
     const p = plan(s, st, { riff: 'keys', version: 'full', moves: [] });
@@ -62,7 +63,8 @@ test('a B that replays the loop keeps A\'s chords and riff and loses the drums',
     const within = (list, x) => list.filter((e) => e.beat >= x.start && e.beat < x.start + x.bars * 4);
     const rel = (list, x) => within(list, x).map((e) => `${(e.beat - x.start).toFixed(3)}${e.roman ?? e.midi}${e.q ?? ''}`);
     assert.deepEqual(rel(p.chords, B), rel(p.chords, A).slice(0, rel(p.chords, B).length));
-    assert.equal(within(p.events.drums, B).length, 0);
+    if (st.music.steady) assert.ok(within(p.events.drums, B).length > 0);
+    else assert.equal(within(p.events.drums, B).length, 0);
     assert.equal(B.key, A.key);
     assert.ok(B.energy < A.energy);
   }
