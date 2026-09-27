@@ -14,6 +14,13 @@ export const TAIL = 3; // room after the section for notes ringing on
 const MIX = { keys: 0.8, pad: 0.5, bass: 0.7, lead: 0.62, kick: 1, snare: 0.9, hats: 0.8 };
 const VERB = { keys: 0.9, pad: 1.4, lead: 1, snare: 0.8, hats: 0.3 };
 const ECHO = { lead: 1, keys: 0.2 };
+// Each tonal part's EQ, so they stop piling into 100–400 Hz: a high-pass above what the part needs (the keys go
+// lower when no bass plays under them), then a dip in the low mids. [type, Hz, Q, dB]
+const EQ = {
+  keys: (bass) => [['hp', bass ? 140 : 70, 0.7, 0], ['peak', 300, 1, -3]],
+  pad: () => [['hp', 220, 0.7, 0], ['peak', 300, 1, -3]],
+  lead: () => [['hp', 200, 0.7, 0]],
+};
 const MASTER = 0.98; // into the deck's glue stage; set so openings measure about -16 LUFS
 
 // Where section i sits in the track, in seconds.
@@ -71,6 +78,11 @@ export function renderSection(p, i, sr, bank, opts = {}) {
   // everything tonal dips under each kick of the whole track, so a tail from the last section ducks too
   if (T.space.pump) duck(['keys', 'pad', 'bass', 'lead'].map((k) => lanes[k]).filter(Boolean), sr, t0,
     p.events.drums.filter((e) => e.drum === 'kick').map((e) => e.beat * spb + e.ms / 1000), T.space.pump);
+
+  // EQ each tonal lane; every filter starts at rest before the section's first note, so sections still just add
+  for (const [k, b] of Object.entries(lanes)) for (const [type, f, q, db] of EQ[k]?.(sec.layers.includes('bass')) ?? []) {
+    for (const ch of [b.L, b.R]) { const bq = new Biquad(type, f, q, db, sr); for (let j = 0; j < n; j++) ch[j] = bq.tick(ch[j]); }
+  }
 
   const out = { dry: stereo(n), verb: stereo(n), echo: stereo(n) }, wet = T.space.wet, E = T.space.echo;
   for (const [k, b] of Object.entries(lanes)) {

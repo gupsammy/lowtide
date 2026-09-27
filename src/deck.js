@@ -36,7 +36,9 @@ export function createDeck(o, sr) {
   const lines = lens.map((n) => new Float32Array(n)), idx = new Int32Array(8), z = new Float64Array(8), y = new Float64Array(8);
   const loss = lens.map((n) => Math.pow(10, (-3 * n) / (S.t60 * sr)));
   const P = Math.max(1, Math.round((S.predelayMs * sr) / 1000)), preL = new Float32Array(P), preR = new Float32Array(P);
-  const vhL = new Biquad('hp', 150, 0.7, 0, sr), vhR = new Biquad('hp', 150, 0.7, 0, sr);
+  // the send is cut to 600 Hz–10 kHz before the room, so the room stays out of the low mids (the "Abbey Road" EQ)
+  const vhL = new Biquad('hp', 600, 0.7, 0, sr), vhR = new Biquad('hp', 600, 0.7, 0, sr);
+  const vlL = new Biquad('lp', 10000, 0.7, 0, sr), vlR = new Biquad('lp', 10000, 0.7, 0, sr);
   let pw = 0;
 
   // Texture: the ocean drum, looped with a long crossfade so the seam never shows; the right side reads half a loop
@@ -98,7 +100,7 @@ export function createDeck(o, sr) {
         // reverb
         let rL = 0, rR = 0;
         if (on('reverb')) {
-          const inL = vhL.tick(verb.L[i] + 0.4 * xL), inR = vhR.tick(verb.R[i] + 0.4 * xR);
+          const inL = vlL.tick(vhL.tick(verb.L[i] + 0.4 * xL)), inR = vlR.tick(vhR.tick(verb.R[i] + 0.4 * xR));
           const dl = preL[pw], dr = preR[pw];
           preL[pw] = inL; preR[pw] = inR; pw = pw + 1 === P ? 0 : pw + 1;
           let sum = 0;
