@@ -96,6 +96,24 @@ How to read the columns:
 5. **The bass keeps off beat 1.** The references start a bass note on beat 1 in 8–27% of bars, Tokyo aside (52%). Ours do in 61%. Our bass lands with the chord change; theirs pushes or lays back.
 6. **The drums play almost throughout, in every mood (82–100% of bars).** "No drums" works as a moment, as the moves in ARRANGE.md use it, not as a mood.
 
+## Our tracks now
+
+27 tracks from the current engine, three a station (seed 2026 in `tools/render.js`), split and measured as the references were, and read from their plans too. Three a station is thin: read the station rows as hints and the totals as the finding.
+
+| | References | Ours, split | Ours, plan |
+|---|---|---|---|
+| Top line notes a bar | 8–10 | 7 (5–9) | 6 (4–8) |
+| Top line repeats the bar a loop earlier | 31–85%, most 60–85% | 62% | 54% |
+| Bass starts a note on beat 1 | 8–27% | 30% | 40% |
+| Swing | 0.51–0.57 | 0.60 | 0.59 |
+
+- **Notes a bar: a small gap, not a large one.** The split adds about one note a bar to our current tracks (6 in the plans, 7 split), so the references' 8–10 means about 7–9 real notes. Night (5 against 10), rain, train and autumn (5–6 against 8) fall shortest. The first study's split added 2–3 notes, on sparser tracks from before the riff.
+- **A lead melody over the riff stops the tune repeating.** The top line is the highest note, so where the lead plays it is the lead. The eight plans with a lead melody repeat 0–39% of bars (median 13%); the nineteen without repeat 42–93% (median 61%). All three Afternoon Laze tracks drew a lead over a `signature` riff and repeat 0–14%. The references' tune repeats like a riff, which our lead melodies don't.
+- **The `root` bassline puts every bass note on beat 1.** Six of seven plans with it read 100%; plans with the others read 29–67% (median 34%). Both are above the references' 8–27%. Afternoon, rain and night draw `root` most.
+- **Swing:** ours swing harder than every reference group. On the 16th grid the 8th reads straight (0.50), so the excess comes from the 8th-grid tracks (0.60–0.65).
+- **Guitar in the audio** follows what the tracks drew: stations whose three tracks all drew a guitar read 56–100% of bars, and stations where none did read 4–17%.
+- **Chord pace can't be read at three tracks a station.** The split counts bass-note changes, which a walking or groove bass adds to; ours range 0.66–2.00 against the references' 0.61–1.28.
+
 ## Rerun
 
 ```

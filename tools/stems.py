@@ -42,7 +42,9 @@ HOP = 256
 WEAK = 0.4  # drop each stem's weakest 40% of notes by basic-pitch amplitude: mostly reverb tails and overtones
 SPARSE = 4  # a stem with fewer confident notes than this per bar counts as a failed transcription
 DEGREE = {'I': 0, 'II': 2, 'III': 4, 'IV': 5, 'V': 7, 'VI': 9, 'VII': 11}
-STATION = {'rain-study': 'rain', 'sunday-porch': 'sunday', 'last-train': 'train', 'autumn-field': 'autumn'}
+# each station's reference group (research/moods.md)
+STATION = {'rain-study': 'rain', 'sunday-porch': 'sunday', 'last-train': 'train', 'autumn-field': 'autumn', 'groovy': 'groovy',
+           'chill-beats': 'latenight', 'afternoon-laze': 'afternoon', 'night-lofi': 'night', 'tokyo-lofi': 'tokyo'}
 BANDS = {0: (0, 150), 1: (150, 5000), 2: (5000, SR / 2)}  # kick, snare, hats
 DRUM_BAND = {'kick': 0, 'snare': 1, 'rim': 1, 'hat': 2, 'open': 2, 'shaker': 2}
 PARTS = ('riff', 'loop', 'bass', 'drums')
